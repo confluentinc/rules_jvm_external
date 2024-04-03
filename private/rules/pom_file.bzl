@@ -23,6 +23,8 @@ def _pom_file_impl(ctx):
         for target, targetExclusions in ctx.attr.exclusions.items()
     }
 
+    implementation_deps = [get_coordinates(target) for target in ctx.attr.implementation_deps]
+
     all_maven_deps = info.maven_deps.to_list()
     for dep in additional_deps:
         for coords in dep[MavenInfo].as_maven_dep.to_list():
@@ -42,6 +44,7 @@ def _pom_file_impl(ctx):
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
         exclusions = exclusions,
+        implementation_deps = implementation_deps,
     )
 
     return [
@@ -97,6 +100,13 @@ The following substitutions are performed on the template file:
         ),
         "exclusions": attr.label_keyed_string_dict(
             doc = "Mapping of dependency labels to a list of exclusions (encoded as a json string). Each exclusion is a dict with a group and an artifact.",
+            allow_empty = True,
+            aspects = [
+                has_maven_deps,
+            ],
+        ),
+        "implementation_deps": attr.label_list(
+            doc = "A list of labels of Java targets to include as 'implementation' dependencies. These are given runtime scope on the generated pom file.",
             allow_empty = True,
             aspects = [
                 has_maven_deps,
