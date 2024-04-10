@@ -12,6 +12,17 @@ def _pom_file_impl(ctx):
     artifact_jars = calculate_artifact_jars(info)
     additional_deps = determine_additional_dependencies(artifact_jars, ctx.attr.additional_dependencies)
 
+    def get_coordinates(target):
+        if not info.label_to_javainfo.get(target.label):
+            fail("exclusions key %s not found in dependencies %s" % (target, info.label_to_javainfo.keys()))
+        else:
+            return ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
+
+    exclusions = {
+        get_coordinates(target): json.decode(targetExclusions)
+        for target, targetExclusions in ctx.attr.exclusions.items()
+    }
+
     all_maven_deps = info.maven_deps.to_list()
     for dep in additional_deps:
         for coords in dep[MavenInfo].as_maven_dep.to_list():
@@ -30,6 +41,7 @@ def _pom_file_impl(ctx):
         versioned_dep_coordinates = sorted(expanded_maven_deps),
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
+        exclusions = exclusions,
     )
 
     return [
@@ -54,7 +66,8 @@ The following substitutions are performed on the template file:
   {type}: Replaced by the maven coordinates type, if present (defaults to "jar")
   {scope}: Replaced by the maven coordinates type, if present (defaults to "compile")
   {dependencies}: Replaced by a list of maven dependencies directly relied upon
-    by java_library targets within the artifact.
+    by java_library targets within the artifact. Dependencies have exclusions
+    for any transitive dependencies that are occur in deploy_env.
 """,
     attrs = {
         "pom_template": attr.label(
@@ -78,6 +91,13 @@ The following substitutions are performed on the template file:
             providers = [
                 [JavaInfo],
             ],
+            aspects = [
+                has_maven_deps,
+            ],
+        ),
+        "exclusions": attr.label_keyed_string_dict(
+            doc = "Mapping of dependency labels to a list of exclusions (encoded as a json string). Each exclusion is a dict with a group and an artifact.",
+            allow_empty = True,
             aspects = [
                 has_maven_deps,
             ],

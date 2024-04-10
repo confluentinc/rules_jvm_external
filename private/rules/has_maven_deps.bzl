@@ -123,7 +123,6 @@ def _has_maven_deps_impl(target, ctx):
             return _EMPTY_INFO
 
     coordinates = read_coordinates(ctx.rule.attr.tags)
-    label_to_javainfo = {target.label: target[JavaInfo]}
 
     gathered = _gathered(
         all_infos = [],

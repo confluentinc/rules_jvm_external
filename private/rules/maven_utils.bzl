@@ -40,7 +40,7 @@ def _whitespace(indent):
         whitespace = whitespace + " "
     return whitespace
 
-def format_dep(unpacked, indent = 8, include_version = True):
+def format_dep(unpacked, indent = 8, include_version = True, exclusions = {}):
     whitespace = _whitespace(indent)
 
     dependency = [
@@ -70,6 +70,27 @@ def format_dep(unpacked, indent = 8, include_version = True):
             "    <scope>%s</scope>\n" % unpacked.scope,
         ])
 
+    if exclusions:
+        dependency.extend([
+            whitespace,
+            "    <exclusions>\n",
+        ])
+        for exclusion in exclusions:
+            dependency.extend([
+                whitespace,
+                "        <exclusion>\n",
+                whitespace,
+                "            <groupId>%s</groupId>\n" % exclusion["group"],
+                whitespace,
+                "            <artifactId>%s</artifactId>\n" % exclusion["artifact"],
+                whitespace,
+                "        </exclusion>\n",
+            ])
+        dependency.extend([
+            whitespace,
+            "    </exclusions>\n",
+        ])
+
     dependency.extend([
         whitespace,
         "</dependency>",
@@ -85,7 +106,8 @@ def generate_pom(
         parent = None,
         versioned_dep_coordinates = [],
         unversioned_dep_coordinates = [],
-        indent = 8):
+        indent = 8,
+        exclusions = {}):
     unpacked_coordinates = unpack_coordinates(coordinates)
     substitutions = {
         "{groupId}": unpacked_coordinates.groupId,
@@ -94,6 +116,10 @@ def generate_pom(
         "{type}": unpacked_coordinates.type or "jar",
         "{scope}": unpacked_coordinates.scope or "compile",
     }
+
+    for key in exclusions:
+        if key not in versioned_dep_coordinates and key not in unversioned_dep_coordinates:
+            fail("Key %s in exclusions does not occur in versioned_dep_coordinates or unversioned_dep_coordinates" % key)
 
     if parent:
         # We only want the groupId, artifactID, and version
@@ -113,10 +139,10 @@ def generate_pom(
     deps = []
     for dep in sorted(versioned_dep_coordinates):
         unpacked = unpack_coordinates(dep)
-        deps.append(format_dep(unpacked, indent = indent))
+        deps.append(format_dep(unpacked, indent = indent, exclusions = exclusions.get(dep, {})))
     for dep in sorted(unversioned_dep_coordinates):
         unpacked = unpack_coordinates(dep)
-        deps.append(format_dep(unpacked, indent = indent, include_version = False))
+        deps.append(format_dep(unpacked, indent = indent, exclusions = exclusions.get(dep, {}), include_version = False))
 
     substitutions.update({"{dependencies}": "\n".join(deps)})
 
