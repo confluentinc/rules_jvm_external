@@ -18,8 +18,6 @@ def _pom_file_impl(ctx):
         else:
             return ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
 
-    # TODO I'd rather not fail when a coordinate is not found, that way we can automate just dumping the whole
-    #  dep list into here. Should we do the same thing for exclusions?
     def get_implementation_coordinates(target):
         if not info.label_to_javainfo.get(target.label):
             return None
