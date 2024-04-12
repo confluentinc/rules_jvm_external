@@ -12,16 +12,30 @@ def _pom_file_impl(ctx):
     artifact_jars = calculate_artifact_jars(info)
     additional_deps = determine_additional_dependencies(artifact_jars, ctx.attr.additional_dependencies)
 
-    def get_coordinates(target):
+    def get_exclusion_coordinates(target):
         if not info.label_to_javainfo.get(target.label):
             fail("exclusions key %s not found in dependencies %s" % (target, info.label_to_javainfo.keys()))
         else:
             return ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
 
+    def get_implementation_coordinates(target):
+        if not info.label_to_javainfo.get(target.label):
+            return None
+        if not target[MavenInfo].coordinates:
+            return None
+
+        return ctx.expand_make_variables("implementation_deps", target[MavenInfo].coordinates, ctx.var)
+
     exclusions = {
-        get_coordinates(target): json.decode(targetExclusions)
+        get_exclusion_coordinates(target): json.decode(targetExclusions)
         for target, targetExclusions in ctx.attr.exclusions.items()
     }
+
+    implementation_deps = [
+        get_implementation_coordinates(target)
+        for target in ctx.attr.implementation_deps
+    ]
+    implementation_deps = [dep for dep in implementation_deps if dep]
 
     all_maven_deps = info.maven_deps.to_list()
     for dep in additional_deps:
@@ -42,6 +56,7 @@ def _pom_file_impl(ctx):
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
         exclusions = exclusions,
+        implementation_deps = implementation_deps,
     )
 
     return [
@@ -97,6 +112,13 @@ The following substitutions are performed on the template file:
         ),
         "exclusions": attr.label_keyed_string_dict(
             doc = "Mapping of dependency labels to a list of exclusions (encoded as a json string). Each exclusion is a dict with a group and an artifact.",
+            allow_empty = True,
+            aspects = [
+                has_maven_deps,
+            ],
+        ),
+        "implementation_deps": attr.label_list(
+            doc = "A list of labels of Java targets to include as 'implementation' dependencies. These are given runtime scope on the generated pom file.",
             allow_empty = True,
             aspects = [
                 has_maven_deps,
