@@ -138,7 +138,7 @@ def generate_pom(
         substitutions.update({"{parent}": "".join(parts)})
 
     deps = []
-    for dep in sorted(versioned_dep_coordinates + unversioned_dep_coordinates):
+    for dep in sorted(versioned_dep_coordinates) + sorted(unversioned_dep_coordinates):
         include_version = dep in versioned_dep_coordinates
         unpacked = unpack_coordinates(dep)
         new_scope = "runtime" if dep in implementation_deps else unpacked.scope
