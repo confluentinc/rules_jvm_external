@@ -12,6 +12,7 @@ def java_export(
         deploy_env = [],
         excluded_workspaces = {name: None for name in DEFAULT_EXCLUDED_WORKSPACES},
         exclusions = {},
+        exclusion_source = [],
         implementation_deps = [],
         pom_template = None,
         visibility = None,
@@ -76,6 +77,8 @@ def java_export(
       exclusions: Mapping of target labels to a list of exclusions to be added to the POM file.
         Each label must correspond to a direct maven dependency of this target.
         Each exclusion is represented as a `group:artifact` string.
+      exclusion_source: A list of Maven artifact coordinates as passed to maven_install from
+        which relevant exclusions will be extracted.
       implementation_deps: A list of labels of Java targets to include as 'implementation' dependencies. These are given
         runtime scope on the generated pom file.
       classifier_artifacts: A dict of classifier -> artifact of additional artifacts to publish to Maven.
@@ -113,6 +116,7 @@ def java_export(
         deploy_env = deploy_env,
         excluded_workspaces = excluded_workspaces,
         exclusions = exclusions,
+        exclusion_source = exclusion_source,
         implementation_deps = implementation_deps,
         pom_template = pom_template,
         visibility = visibility,
@@ -133,6 +137,7 @@ def maven_export(
         deploy_env = [],
         excluded_workspaces = {},
         exclusions = {},
+        exclusion_source = [],
         implementation_deps = [],
         pom_template = None,
         visibility = None,
@@ -200,6 +205,8 @@ def maven_export(
       exclusions: Mapping of target labels to a list of exclusions to be added to the POM file.
         Each label must correspond to a direct maven dependency of this target.
         Each exclusion is represented as a `group:artifact` string.
+      exclusion_source: A list of Maven artifact coordinates as passed to maven_install from
+        which relevant exclusions will be extracted.
       implementation_deps: A list of labels of Java targets to include as 'implementation' dependencies. These are given
         runtime scope on the generated pom file.
       doc_deps: Other `javadoc` targets that are referenced by the generated `javadoc` target
@@ -291,6 +298,11 @@ def maven_export(
         for target, targetExclusions in exclusions.items()
     }
 
+    exclusion_source_json_strings = [
+        _json.write_artifact_spec(artifact)
+        for artifact in parse.parse_artifact_spec_list(exclusion_source)
+    ]
+
     pom_file(
         name = "%s-pom" % name,
         target = ":%s" % lib_name,
@@ -301,6 +313,7 @@ def maven_export(
         testonly = testonly,
         toolchains = toolchains,
         exclusions = exclusions_dict_json_strings,
+        exclusion_source = exclusion_source_json_strings,
         implementation_deps = implementation_deps,
     )
 
