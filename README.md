@@ -24,6 +24,7 @@ Table of Contents
          * [Fetch source JARs](#fetch-source-jars)
          * [Checksum verification](#checksum-verification)
          * [artifact helper macro](#artifact-helper-macro)
+         * [java_plugin_artifact helper macro](#java_plugin_artifact-helper-macro)
          * [Multiple maven_install declarations for isolated artifact version trees](#multiple-maven_install-declarations-for-isolated-artifact-version-trees)
          * [Detailed dependency information specifications](#detailed-dependency-information-specifications)
          * [Artifact exclusion](#artifact-exclusion)
@@ -70,8 +71,7 @@ Support for Bazel versions before `4.0.0` is only available on rules_jvm_externa
 
 > New: on Bazel 6, you can use bzlmod instead of following directions below.
 > See [bzlmod](./docs/bzlmod.md).
-> Expect rough edges and incomplete support as bzlmod is still a new feature as of early 2023.
-> Note, bzlmod is expected to be on-by-default in Bazel 7.0.
+> bzlmod is on-by-default in Bazel 7.0.
 
 List the top-level Maven artifacts and servers in the WORKSPACE:
 
@@ -221,18 +221,11 @@ to update `maven_install.json`, run this command to re-pin the unpinned `@maven`
 repository:
 
 ```
-$ bazel run @unpinned_maven//:pin
+$ REPIN=1 bazel run @maven//:pin
 ```
 
 Without re-pinning, `maven_install` will not pick up the changes made to the
 WORKSPACE, as `maven_install.json` is now the source of truth.
-
-Note that the repository is `@unpinned_maven` instead of `@maven`. When using
-artifact pinning, each `maven_install` repository (e.g. `@maven`) will be
-accompanied by an unpinned repository. This repository name has the `@unpinned_`
-prefix (e.g.`@unpinned_maven` or `@unpinned_<your_maven_install_name>`). For
-example, if your `maven_install` is named `@foo`, `@unpinned_foo` will be
-created.
 
 ### Requiring lock file repinning when the list of artifacts changes
 
@@ -246,15 +239,15 @@ it is possible to update the `maven_install.json` file using:
 
 ```shell
 # To repin everything:
-REPIN=1 bazel run @unpinned_maven//:pin
+REPIN=1 bazel run @maven//:pin
 
 # To only repin rules_jvm_external:
-RULES_JVM_EXTERNAL_REPIN=1 bazel run @unpinned_maven//:pin
+RULES_JVM_EXTERNAL_REPIN=1 bazel run @maven//:pin
 ```
 
 Alternatively, it is also possible to modify the
 `fail_if_repin_required` attribute in your `WORKSPACE` file, run
-`bazel run @unpinned_maven//:pin` and then reset the
+`bazel run @maven//:pin` and then reset the
 `fail_if_repin_required` attribute.
 
 ### Custom location for `maven_install.json`
@@ -452,6 +445,25 @@ supported and translate to corresponding versionless target.
 Note that usage of this macro makes BUILD file refactoring with tools like
 `buildozer` more difficult, because the macro hides the actual target label at
 the syntax level.
+
+### `java_plugin_artifact` helper macro
+
+The `java_plugin_artifact` macro finds a `java_plugin` target which can be used
+to run an annotation procesor from a particular artifact.
+
+For example, if you pull `com.google.auto.value:auto-value` into a
+`maven_install`, you can use the `java_plugin_artifact` macro in the `plugins`
+attribute of a target like `java_library`:
+
+```python
+java_library(
+    name = "some_lib",
+    srcs = ["SrcUsingAuto.java"],
+    plugins = [
+        java_plugin_artifact("com.google.auto.value:auto-value", "com.google.auto.value.processor.AutoValueProcessor"),
+    ],
+)
+```
 
 ### Multiple `maven_install` declarations for isolated artifact version trees
 
@@ -1222,7 +1234,7 @@ Set the `RJE_VERBOSE` environment variable to `true` to print `coursier`'s verbo
 output. For example:
 
 ```
-$ RJE_VERBOSE=true bazel run @unpinned_maven//:pin
+$ RJE_VERBOSE=true bazel run @maven//:pin
 ```
 
 ### Tests

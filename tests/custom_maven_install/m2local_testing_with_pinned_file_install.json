@@ -11,15 +11,16 @@
     }
   },
   "dependencies": {},
+  "m2local": true,
   "packages": {
     "com.example:kt": [
       "com.jvm.external.jvm_export"
     ]
   },
-  "m2local": true,
   "repositories": {
     "m2Local/": [],
     "https://repo1.maven.org/maven2/": []
   },
+  "services": {},
   "version": "2"
 }
