@@ -12,12 +12,6 @@ def _pom_file_impl(ctx):
     artifact_jars = calculate_artifact_jars(info)
     additional_deps = determine_additional_dependencies(artifact_jars, ctx.attr.additional_dependencies)
 
-    def get_exclusion_coordinates(target):
-        if not info.label_to_javainfo.get(target.label):
-            fail("exclusions key %s not found in dependencies %s" % (target, info.label_to_javainfo.keys()))
-        else:
-            return ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
-
     def get_implementation_coordinates(target):
         if not info.label_to_javainfo.get(target.label):
             return None
@@ -25,11 +19,6 @@ def _pom_file_impl(ctx):
             return None
 
         return ctx.expand_make_variables("implementation_deps", target[MavenInfo].coordinates, ctx.var)
-
-    exclusions = {
-        get_exclusion_coordinates(target): json.decode(targetExclusions)
-        for target, targetExclusions in ctx.attr.exclusions.items()
-    }
 
     implementation_deps = [
         get_implementation_coordinates(target)
@@ -45,6 +34,33 @@ def _pom_file_impl(ctx):
         ctx.expand_make_variables("additional_deps", coords, ctx.var)
         for coords in all_maven_deps
     ]
+
+    def dependency_coordinates(target):
+        if not info.label_to_javainfo.get(target.label):
+            fail("exclusions key %s not found in dependencies %s" % (target, info.label_to_javainfo.keys()))
+        else:
+            return ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
+
+    exclusions = {
+        dependency_coordinates(target): json.decode(targetExclusions)
+        for target, targetExclusions in ctx.attr.exclusions.items()
+    }
+
+    exclusion_source = [json.decode(artifact) for artifact in ctx.attr.exclusion_source]
+
+    def artifact_coordinates(artifact):
+        return ":".join([artifact.get("group"), artifact.get("artifact"), artifact.get("version")])
+
+    exclusion_source_dict = {
+        artifact_coordinates(artifact): artifact
+        for artifact in exclusion_source
+    }
+    expanded_maven_deps_set = {dep: None for dep in expanded_maven_deps}
+    exclusions.update({
+        coords: artifact.get("exclusions", [])
+        for coords, artifact in exclusion_source_dict.items()
+        if coords in expanded_maven_deps_set
+    })
 
     # Expand maven coordinates for any variables to be replaced.
     coordinates = ctx.expand_make_variables("coordinates", info.coordinates, ctx.var)
@@ -123,6 +139,10 @@ The following substitutions are performed on the template file:
             aspects = [
                 has_maven_deps,
             ],
+        ),
+        "exclusion_source": attr.string_list(
+            doc = "A list of Maven artifact coordinates as passed to maven_install from which relevant exclusions will be extracted.",
+            allow_empty = True,
         ),
     },
 )
