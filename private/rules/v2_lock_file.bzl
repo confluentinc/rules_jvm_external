@@ -92,6 +92,7 @@ def _get_artifacts(lock_file_contents):
     repositories = lock_file_contents.get("repositories", {})
     files = lock_file_contents.get("files", {})
     skipped = lock_file_contents.get("skipped", [])
+    services = lock_file_contents.get("services", {})
 
     artifacts = []
 
@@ -140,6 +141,7 @@ def _get_artifacts(lock_file_contents):
                 "sha256": shasum,
                 "file": file,
                 "deps": deps,
+                "annotation_processors": services.get(root, {}).get("javax.annotation.processing.Processor", []),
                 "urls": urls,
             })
 
@@ -162,12 +164,9 @@ def _render_lock_file(lock_file_contents, input_hash):
         contents.append("  \"conflict_resolution\": %s," % json.encode_indent(lock_file_contents["conflict_resolution"], prefix = "  ", indent = "  "))
     contents.append("  \"artifacts\": %s," % json.encode_indent(lock_file_contents["artifacts"], prefix = "  ", indent = "  "))
     contents.append("  \"dependencies\": %s," % json.encode_indent(lock_file_contents["dependencies"], prefix = "  ", indent = "  "))
-    if lock_file_contents.get("skipped"):
-        contents.append("  \"skipped\": %s," % json.encode_indent(lock_file_contents["skipped"], prefix = "  ", indent = "  "))
-    contents.append("  \"packages\": %s," % json.encode_indent(lock_file_contents["packages"], prefix = "  ", indent = "  "))
-    contents.append("  \"services\": %s," % json.encode_indent(lock_file_contents["services"], prefix = "  ", indent = "  "))
     if lock_file_contents.get("m2local"):
         contents.append("  \"m2local\": true,")
+    contents.append("  \"packages\": %s," % json.encode_indent(lock_file_contents["packages"], prefix = "  ", indent = "  "))
     contents.append("  \"repositories\": {")
 
     items = lock_file_contents["repositories"].items()
@@ -179,6 +178,9 @@ def _render_lock_file(lock_file_contents, input_hash):
             to_append += ","
         contents.append(to_append)
     contents.append("  },")
+    contents.append("  \"services\": %s," % json.encode_indent(lock_file_contents["services"], prefix = "  ", indent = "  "))
+    if lock_file_contents.get("skipped"):
+        contents.append("  \"skipped\": %s," % json.encode_indent(lock_file_contents["skipped"], prefix = "  ", indent = "  "))
     contents.append("  \"version\": \"2\"")
     contents.append("}")
     contents.append("")
