@@ -12,7 +12,6 @@ def java_export(
         deploy_env = [],
         excluded_workspaces = {name: None for name in DEFAULT_EXCLUDED_WORKSPACES},
         exclusions = {},
-        implementation_deps = [],
         pom_template = None,
         visibility = None,
         tags = [],
@@ -76,8 +75,6 @@ def java_export(
       exclusions: Mapping of target labels to a list of exclusions to be added to the POM file.
         Each label must correspond to a direct maven dependency of this target.
         Each exclusion is represented as a `group:artifact` string.
-      implementation_deps: A list of labels of Java targets to include as 'implementation' dependencies. These are given
-        runtime scope on the generated pom file.
       classifier_artifacts: A dict of classifier -> artifact of additional artifacts to publish to Maven.
       doc_deps: Other `javadoc` targets that are referenced by the generated `javadoc` target
         (if not using `tags = ["no-javadoc"]`)
@@ -113,7 +110,6 @@ def java_export(
         deploy_env = deploy_env,
         excluded_workspaces = excluded_workspaces,
         exclusions = exclusions,
-        implementation_deps = implementation_deps,
         pom_template = pom_template,
         visibility = visibility,
         tags = tags,
@@ -133,7 +129,6 @@ def maven_export(
         deploy_env = [],
         excluded_workspaces = {},
         exclusions = {},
-        implementation_deps = [],
         pom_template = None,
         visibility = None,
         tags = [],
@@ -200,8 +195,6 @@ def maven_export(
       exclusions: Mapping of target labels to a list of exclusions to be added to the POM file.
         Each label must correspond to a direct maven dependency of this target.
         Each exclusion is represented as a `group:artifact` string.
-      implementation_deps: A list of labels of Java targets to include as 'implementation' dependencies. These are given
-        runtime scope on the generated pom file.
       doc_deps: Other `javadoc` targets that are referenced by the generated `javadoc` target
         (if not using `tags = ["no-javadoc"]`)
       doc_url: The URL at which the generated `javadoc` will be hosted (if not using
@@ -301,7 +294,6 @@ def maven_export(
         testonly = testonly,
         toolchains = toolchains,
         exclusions = exclusions_dict_json_strings,
-        implementation_deps = implementation_deps,
     )
 
     maven_publish(
