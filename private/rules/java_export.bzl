@@ -17,7 +17,6 @@ def java_export(
         tags = [],
         testonly = None,
         classifier_artifacts = {},
-        prepend_services = None,
         **kwargs):
     """Extends `java_library` to allow maven artifacts to be uploaded.
 
@@ -77,7 +76,6 @@ def java_export(
         Each label must correspond to a direct maven dependency of this target.
         Each exclusion is represented as a `group:artifact` string.
       classifier_artifacts: A dict of classifier -> artifact of additional artifacts to publish to Maven.
-      prepend_services: A file whose contents will be prepended to the generated `META-INF/services` files in the -project jar.
       doc_deps: Other `javadoc` targets that are referenced by the generated `javadoc` target
         (if not using `tags = ["no-javadoc"]`)
       doc_url: The URL at which the generated `javadoc` will be hosted (if not using
@@ -118,7 +116,6 @@ def java_export(
         testonly = testonly,
         javadocopts = javadocopts,
         classifier_artifacts = classifier_artifacts,
-        prepend_services = prepend_services,
         doc_deps = doc_deps,
         doc_url = doc_url,
         toolchains = toolchains,
@@ -138,7 +135,6 @@ def maven_export(
         testonly = False,
         javadocopts = [],
         classifier_artifacts = {},
-        prepend_services = None,
         *,
         doc_deps = [],
         doc_url = "",
@@ -199,7 +195,6 @@ def maven_export(
       exclusions: Mapping of target labels to a list of exclusions to be added to the POM file.
         Each label must correspond to a direct maven dependency of this target.
         Each exclusion is represented as a `group:artifact` string.
-      prepend_services: A file whose contents will be prepended to the generated `META-INF/services` files in the -project jar.
       doc_deps: Other `javadoc` targets that are referenced by the generated `javadoc` target
         (if not using `tags = ["no-javadoc"]`)
       doc_url: The URL at which the generated `javadoc` will be hosted (if not using
@@ -232,7 +227,6 @@ def maven_export(
         deploy_env = deploy_env,
         excluded_workspaces = excluded_workspaces.keys(),
         additional_dependencies = additional_dependencies,
-        prepend_services = prepend_services,
         visibility = visibility,
         tags = tags + maven_coordinates_tags,
         testonly = testonly,
