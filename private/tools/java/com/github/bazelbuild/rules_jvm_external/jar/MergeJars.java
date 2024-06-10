@@ -46,7 +46,6 @@ import java.util.TreeMap;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
-import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
@@ -55,7 +54,6 @@ public class MergeJars {
 
   public static void main(String[] args) throws IOException {
     Path out = null;
-    Path prependServices = null;
     // Insertion order may matter
     Set<Path> sources = new LinkedHashSet<>();
     Set<Path> excludes = new HashSet<>();
@@ -82,11 +80,6 @@ public class MergeJars {
 
         case "--sources":
           sources.add(isValid(Paths.get(args[++i])));
-          break;
-
-        case "--prepend_services":
-          isValid(Paths.get(args[++i]));
-          prependServices = Paths.get(args[i]);
           break;
 
         default:
