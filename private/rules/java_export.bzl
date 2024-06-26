@@ -91,6 +91,7 @@ def java_export(
     javadocopts = kwargs.pop("javadocopts", [])
     doc_deps = kwargs.pop("doc_deps", [])
     doc_url = kwargs.pop("doc_url", "")
+    doc_resources = kwargs.pop("doc_resources", [])
     toolchains = kwargs.pop("toolchains", [])
 
     # Construct the java_library we'll export from here.
@@ -118,6 +119,7 @@ def java_export(
         classifier_artifacts = classifier_artifacts,
         doc_deps = doc_deps,
         doc_url = doc_url,
+        doc_resources = doc_resources,
         toolchains = toolchains,
     )
 
@@ -138,6 +140,7 @@ def maven_export(
         *,
         doc_deps = [],
         doc_url = "",
+        doc_resources = [],
         toolchains = None):
     """
     All arguments are the same as java_export with the addition of:
@@ -199,6 +202,7 @@ def maven_export(
         (if not using `tags = ["no-javadoc"]`)
       doc_url: The URL at which the generated `javadoc` will be hosted (if not using
         `tags = ["no-javadoc"]`).
+      doc_resources: Resources to be included in the javadoc jar.
       visibility: The visibility of the target
       kwargs: These are passed to [`java_library`](https://bazel.build/reference/be/java#java_library),
         and so may contain any valid parameter for that rule.
@@ -268,6 +272,7 @@ def maven_export(
             javadocopts = javadocopts,
             doc_deps = doc_deps,
             doc_url = doc_url,
+            doc_resources = doc_resources,
             excluded_workspaces = excluded_workspaces.keys(),
             additional_dependencies = additional_dependencies,
             visibility = visibility,
