@@ -149,14 +149,14 @@ public class MavenResolver implements Resolver {
             .collect(Collectors.toSet());
 
     RepositorySystem system = createRepositorySystem();
-    ConsoleRepositoryListener consoleLog = new ConsoleRepositoryListener(listener);
-    ErrorReportingListener errors = new ErrorReportingListener();
-    CoordinateGatheringListener coordsListener = new CoordinateGatheringListener();
+    ConsoleRepositoryListener consoleLogListener = new ConsoleRepositoryListener(listener);
+    ErrorReportingListener errorListener = new ErrorReportingListener();
+    CoordinateGatheringListener coordinatesListener = new CoordinateGatheringListener();
     RepositorySystemSession session =
         prepareSession(
             system,
             new ClassicDependencyManager(),
-            new CompoundListener(consoleLog, errors, coordsListener),
+            new CompoundListener(consoleLogListener, errorListener, coordinatesListener),
             request.getLocalCache());
 
     List<RemoteRepository> repositories = new ArrayList<>(repos.size());
@@ -164,7 +164,7 @@ public class MavenResolver implements Resolver {
     repositories.addAll(repos);
 
     List<Dependency> bomsWithGlobalExclusions = addGlobalExclusions(globalExclusions, boms);
-    consoleLog.setPhase("Resolving " + bomsWithGlobalExclusions.size() + " BOM artifacts");
+    consoleLogListener.setPhase("Resolving " + bomsWithGlobalExclusions.size() + " BOM artifacts");
     List<Dependency> bomDependencies =
         resolveArtifactsFromBoms(system, session, repositories, bomsWithGlobalExclusions);
 
@@ -185,11 +185,11 @@ public class MavenResolver implements Resolver {
         prepareSession(
             system,
             derived,
-            new CompoundListener(consoleLog, errors, coordsListener),
+            new CompoundListener(consoleLogListener, errorListener, coordinatesListener),
             request.getLocalCache());
 
     List<Dependency> depsWithGlobalExclusions = addGlobalExclusions(globalExclusions, dependencies);
-    consoleLog.setPhase(
+    consoleLogListener.setPhase(
         "Resolving and fetching the transitive closure of "
             + depsWithGlobalExclusions.size()
             + " artifact(s)");
@@ -202,7 +202,7 @@ public class MavenResolver implements Resolver {
       System.err.println("\nDependency Graph:");
       resolvedDependencies.forEach(node -> node.accept(graphDumper));
 
-      Map<Coordinates, Coordinates> remappings = coordsListener.getRemappings();
+      Map<Coordinates, Coordinates> remappings = coordinatesListener.getRemappings();
       if (remappings.isEmpty()) {
         System.err.println("\nNo dependency remappings");
       } else {
@@ -213,7 +213,7 @@ public class MavenResolver implements Resolver {
       }
     }
 
-    List<Exception> exceptions = errors.getExceptions();
+    List<Exception> exceptions = errorListener.getExceptions();
     if (!exceptions.isEmpty()) {
       for (Exception e : exceptions) {
         if (e instanceof ModelBuildingException) {
@@ -255,7 +255,7 @@ public class MavenResolver implements Resolver {
     }
 
     Graph<Coordinates> dependencyGraph =
-        buildDependencyGraph(coordsListener.getRemappings(), resolvedDependencies);
+        buildDependencyGraph(coordinatesListener.getRemappings(), resolvedDependencies);
     GraphNormalizationResult graphNormalizationResult = makeVersionsConsistent(dependencyGraph);
 
     Set<Conflict> conflicts =
@@ -368,18 +368,37 @@ public class MavenResolver implements Resolver {
     // Without this, the versions requested in BOMs will be preferred to the
     // one that the user requested
     // First add all the dependencies that have versions
+    Map<String, String> artifactVersions = new HashMap<>();
     Set<String> artifactKeys = new HashSet<>();
     dependencies.stream()
         .map(Dependency::getArtifact)
         .filter(artifact -> artifact.getVersion() != null)
         .filter(artifact -> !artifact.getVersion().isEmpty())
-        .forEach(artifact -> artifactKeys.add(getArtifactKey(artifact)));
+        .forEach(
+            artifact -> {
+              artifactVersions.put(getArtifactKey(artifact), artifact.getVersion());
+              artifactKeys.add(getArtifactKey(artifact));
+            });
 
     ImmutableList.Builder<Dependency> managedDependencies = ImmutableList.builder();
     managedDependencies.addAll(dependencies);
 
     // Then add all the BOM dependencies that are not in the declared dependency list
+    boolean rjeVerbose = System.getenv("RJE_VERBOSE") != null;
     bomDependencies.stream()
+        .peek(
+            dep -> {
+              if (rjeVerbose) {
+                String artifactKey = getArtifactKey(dep.getArtifact());
+                if (artifactKeys.contains(artifactKey)) {
+                  System.err.println(
+                      "BOM version for "
+                          + dep.getArtifact()
+                          + " has been overridden by an explicit dependency version: "
+                          + artifactVersions.get(artifactKey));
+                }
+              }
+            })
         .filter(dep -> !artifactKeys.contains(getArtifactKey(dep.getArtifact())))
         .forEach(managedDependencies::add);
 
@@ -404,7 +423,8 @@ public class MavenResolver implements Resolver {
       RepositorySystemSession session,
       List<RemoteRepository> repositories,
       List<Dependency> boms) {
-    Set<Dependency> managedDependencies = new HashSet<>();
+    // Use LinkedHashSet to maintain order of how BOMS were declared
+    Set<Dependency> managedDependencies = new LinkedHashSet<>();
 
     for (Dependency bom : boms) {
       ArtifactDescriptorRequest request =
