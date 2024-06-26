@@ -11,7 +11,9 @@ _DEFAULT_REPOSITORIES = [
 _MAVEN_VERSION = "3.9.6"
 _MAVEN_RESOLVER_VERSION = "1.9.18"
 
-def rules_jvm_external_deps(repositories = _DEFAULT_REPOSITORIES):
+def rules_jvm_external_deps(
+        repositories = _DEFAULT_REPOSITORIES,
+        deps_lock_file = "@rules_jvm_external//:rules_jvm_external_deps_install.json"):
     maybe(
         http_archive,
         name = "bazel_skylib",
@@ -81,13 +83,14 @@ def rules_jvm_external_deps(repositories = _DEFAULT_REPOSITORIES):
             "org.apache.maven.resolver:maven-resolver-util:%s" % _MAVEN_RESOLVER_VERSION,
             "org.codehaus.plexus:plexus-cipher:2.1.0",
             "org.codehaus.plexus:plexus-sec-dispatcher:2.0",
+            "org.codehaus.plexus:plexus-utils:3.5.1",
             "org.fusesource.jansi:jansi:2.4.1",
             "org.slf4j:jul-to-slf4j:2.0.12",
             "org.slf4j:log4j-over-slf4j:2.0.12",
             "org.slf4j:slf4j-simple:2.0.12",
             "software.amazon.awssdk:s3:2.25.23",
         ],
-        maven_install_json = "@rules_jvm_external//:rules_jvm_external_deps_install.json",
+        maven_install_json = deps_lock_file,
         fail_if_repin_required = True,
         strict_visibility = True,
         fetch_sources = True,
