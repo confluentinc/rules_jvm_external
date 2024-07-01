@@ -142,7 +142,8 @@ javadoc = rule(
             """,
         ),
         "doc_resources": attr.label_list(
-            doc = "Resources to include in the javadoc jar.",
+            doc = """"Resources to include in the javadoc jar.
+            Note: Adding resources to nested directories is untested.""",
             allow_empty = True,
             allow_files = True,
             default = [],
