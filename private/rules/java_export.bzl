@@ -17,6 +17,7 @@ def java_export(
         tags = [],
         testonly = None,
         classifier_artifacts = {},
+        publish_all_jar = False,
         **kwargs):
     """Extends `java_library` to allow maven artifacts to be uploaded.
 
@@ -102,6 +103,18 @@ def java_export(
         testonly = testonly,
         **kwargs
     )
+
+    if publish_all_jar:
+        classifier_artifacts["all"] = name + "-all_deploy.jar"
+
+        native.java_binary(
+            name = "%s-all" % name,
+            visibility = visibility,
+            tags = tags + maven_coordinates_tags,
+            testonly = testonly,
+            main_class = "none",
+            **kwargs
+        )
 
     maven_export(
         name = name,
