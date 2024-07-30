@@ -32,7 +32,7 @@ def unpack_coordinates(coords):
         artifactId = parts.get(1),
         type = parts.get(2),
         scope = None,
-        classifier = parts.get(4),
+        classifier = parts.get(3),
         version = version,
     )
 
