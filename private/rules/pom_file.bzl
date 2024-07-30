@@ -1,6 +1,6 @@
 load("@rules_java//java:defs.bzl", "JavaInfo")
 load(":has_maven_deps.bzl", "MavenInfo", "calculate_artifact_jars", "has_maven_deps")
-load(":maven_utils.bzl", "determine_additional_dependencies", "generate_pom")
+load(":maven_utils.bzl", "determine_additional_dependencies", "generate_pom", "unpack_coordinates")
 
 def _pom_file_impl(ctx):
     # Ensure the target has coordinates
@@ -16,7 +16,8 @@ def _pom_file_impl(ctx):
         if not info.label_to_javainfo.get(target.label):
             fail("exclusions key %s not found in dependencies %s" % (target, info.label_to_javainfo.keys()))
         else:
-            return ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
+            coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
+            return unpack_coordinates(coords)
 
     exclusions = {
         get_exclusion_coordinates(target): json.decode(targetExclusions)
@@ -31,11 +32,11 @@ def _pom_file_impl(ctx):
             all_maven_deps.append(coords)
 
     expanded_maven_deps = [
-        ctx.expand_make_variables("additional_deps", coords, ctx.var)
+        unpack_coordinates(ctx.expand_make_variables("additional_deps", coords, ctx.var))
         for coords in all_maven_deps
     ]
     expanded_runtime_deps = [
-        ctx.expand_make_variables("maven_runtime_deps", coords, ctx.var)
+        unpack_coordinates(ctx.expand_make_variables("maven_runtime_deps", coords, ctx.var))
         for coords in runtime_maven_deps
     ]
 
@@ -45,7 +46,7 @@ def _pom_file_impl(ctx):
     out = generate_pom(
         ctx,
         coordinates = coordinates,
-        versioned_dep_coordinates = sorted(expanded_maven_deps),
+        versioned_dep_coordinates = expanded_maven_deps,
         runtime_deps = expanded_runtime_deps,
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
