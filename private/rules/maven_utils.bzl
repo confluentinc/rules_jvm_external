@@ -2,11 +2,11 @@ load("//private/lib:bzlmod.bzl", "get_module_name_of_owner_of_repo")
 
 def unpack_coordinates(coords):
     """Takes a maven coordinate and unpacks it into a struct with fields
-    `groupId`, `artifactId`, `version`, `type`, `scope`
+    `groupId`, `artifactId`, `version`, `type`, `classifier`
     where type and scope are optional.
 
     Assumes following maven coordinate syntax:
-    groupId:artifactId[:type[:scope]]:version
+    groupId:artifactId[:type[:classifier]]:version
     """
     if not coords:
         return None
@@ -20,6 +20,7 @@ def unpack_coordinates(coords):
             artifactId = parts[1],
             type = None,
             scope = None,
+            classifier = None,
             version = None,
         )
 
@@ -32,7 +33,8 @@ def unpack_coordinates(coords):
         groupId = parts.get(0),
         artifactId = parts.get(1),
         type = parts.get(2),
-        scope = parts.get(3),
+        scope = None,
+        classifier = parts.get(3),
         version = version,
     )
 
@@ -42,7 +44,7 @@ def _whitespace(indent):
         whitespace = whitespace + " "
     return whitespace
 
-def format_dep(unpacked, indent = 8, include_version = True):
+def format_dep(unpacked, indent = 8, include_version = True, exclusions = {}):
     whitespace = _whitespace(indent)
 
     dependency = [
@@ -72,6 +74,33 @@ def format_dep(unpacked, indent = 8, include_version = True):
             "    <scope>%s</scope>\n" % unpacked.scope,
         ])
 
+    if unpacked.classifier:
+        dependency.extend([
+            whitespace,
+            "    <classifier>%s</classifier>\n" % unpacked.classifier,
+        ])
+
+    if exclusions:
+        dependency.extend([
+            whitespace,
+            "    <exclusions>\n",
+        ])
+        for exclusion in exclusions:
+            dependency.extend([
+                whitespace,
+                "        <exclusion>\n",
+                whitespace,
+                "            <groupId>%s</groupId>\n" % exclusion["group"],
+                whitespace,
+                "            <artifactId>%s</artifactId>\n" % exclusion["artifact"],
+                whitespace,
+                "        </exclusion>\n",
+            ])
+        dependency.extend([
+            whitespace,
+            "    </exclusions>\n",
+        ])
+
     dependency.extend([
         whitespace,
         "</dependency>",
@@ -88,15 +117,21 @@ def generate_pom(
         versioned_dep_coordinates = [],
         unversioned_dep_coordinates = [],
         runtime_deps = [],
-        indent = 8):
+        indent = 8,
+        exclusions = {}):
     unpacked_coordinates = unpack_coordinates(coordinates)
     substitutions = {
         "{groupId}": unpacked_coordinates.groupId,
         "{artifactId}": unpacked_coordinates.artifactId,
         "{version}": unpacked_coordinates.version,
         "{type}": unpacked_coordinates.type or "jar",
+        "{classifier}": unpacked_coordinates.classifier or "",
         "{scope}": unpacked_coordinates.scope or "compile",
     }
+
+    for key in exclusions:
+        if key not in versioned_dep_coordinates and key not in unversioned_dep_coordinates:
+            fail("Key %s in exclusions does not occur in versioned_dep_coordinates or unversioned_dep_coordinates" % key)
 
     if parent:
         # We only want the groupId, artifactID, and version
@@ -114,18 +149,18 @@ def generate_pom(
         substitutions.update({"{parent}": "".join(parts)})
 
     deps = []
-    for dep in sorted(versioned_dep_coordinates) + sorted(unversioned_dep_coordinates):
+    for dep in _sort_unpacked(versioned_dep_coordinates) + _sort_unpacked(unversioned_dep_coordinates):
         include_version = dep in versioned_dep_coordinates
-        unpacked = unpack_coordinates(dep)
-        new_scope = "runtime" if dep in runtime_deps else unpacked.scope
+        new_scope = "runtime" if dep in runtime_deps else dep.scope
         unpacked = struct(
-            groupId = unpacked.groupId,
-            artifactId = unpacked.artifactId,
-            type = unpacked.type,
+            groupId = dep.groupId,
+            artifactId = dep.artifactId,
+            type = dep.type,
             scope = new_scope,
-            version = unpacked.version,
+            classifier = dep.classifier,
+            version = dep.version,
         )
-        deps.append(format_dep(unpacked, indent = indent, include_version = include_version))
+        deps.append(format_dep(unpacked, indent = indent, exclusions = exclusions.get(dep, {}), include_version = include_version))
 
     substitutions.update({"{dependencies}": "\n".join(deps)})
 
@@ -158,3 +193,11 @@ def determine_additional_dependencies(jar_files, additional_dependencies):
                     to_return.append(dep)
 
     return to_return
+
+def _sort_unpacked(unpacked_dep):
+    """Sorts a list of unpacked dependencies by groupId, artifactId, and version."""
+
+    def _sort_key(dep):
+        return (dep.groupId, dep.artifactId, dep.version)
+
+    return sorted(unpacked_dep, key = _sort_key)

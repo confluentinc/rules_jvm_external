@@ -87,7 +87,7 @@ def _javadoc_impl(ctx):
         ctx.executable._javadoc,
         sources,
         classpath,
-        ctx.attr.javadocopts,
+        javadocopts,
         ctx.attr.doc_deps,
         ctx.attr.doc_resources,
         jar_file,
