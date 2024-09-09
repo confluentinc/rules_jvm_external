@@ -8,7 +8,7 @@ _JavadocInfo = provider(
     },
 )
 
-_default_javadocopts = [
+_DEFAULT_JAVADOCOPTS = [
     "-notimestamp",
     "-use",
     "-quiet",
@@ -46,15 +46,11 @@ def generate_javadoc(
         args.add(dep_info.element_list.dirname)
         inputs.append(dep_info.element_list)
 
-    processed_opts = []
-    for opt in javadocopts:
-        if "$(" in opt:
-            processed_opt = ctx.expand_make_variables("javadocopts", opt, ctx.var)
-            processed_opts.append(processed_opt)
-        else:
-            processed_opts.append(opt)
-
-    args.add_all(processed_opts)
+    javadocopts = [
+        ctx.expand_make_variables("javadocopts", opt, ctx.var)
+        for opt in javadocopts
+    ]
+    args.add_all(javadocopts)
 
     ctx.actions.run(
         executable = javadoc,
@@ -86,15 +82,12 @@ def _javadoc_impl(ctx):
     # from dep[JavaInfo].compilation_info (which, FWIW, always returns
     # `None` https://github.com/bazelbuild/bazel/issues/10170). For this
     # reason we allow people to set javadocopts via the rule attrs.
-
-    javadocopts = ctx.attr.javadocopts if ctx.attr.javadocopts else _default_javadocopts
-
     generate_javadoc(
         ctx,
         ctx.executable._javadoc,
         sources,
         classpath,
-        javadocopts,
+        ctx.attr.javadocopts,
         ctx.attr.doc_deps,
         ctx.attr.doc_resources,
         jar_file,
@@ -132,8 +125,10 @@ javadoc = rule(
         "javadocopts": attr.string_list(
             doc = """javadoc options.
             Note sources and classpath are derived from the deps. Any additional
-            options can be passed here. If nothing is passed, a default list of options is used.
-            """,
+            options can be passed here. If nothing is passed, a default list of options is used:
+            %s
+            """ % _DEFAULT_JAVADOCOPTS,
+            default = _DEFAULT_JAVADOCOPTS,
         ),
         "doc_deps": attr.label_list(
             doc = """`javadoc` targets referenced by the current target.
@@ -153,8 +148,7 @@ javadoc = rule(
             """,
         ),
         "doc_resources": attr.label_list(
-            doc = """"Resources to include in the javadoc jar.
-            Note: Adding resources to nested directories is untested.""",
+            doc = "Resources to include in the javadoc jar.",
             allow_empty = True,
             allow_files = True,
             default = [],
