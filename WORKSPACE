@@ -394,7 +394,7 @@ maven_install(
             artifact = "jetty-http",
             classifier = "tests",
             group = "org.eclipse.jetty",
-            version = "9.4.20.v20190813",
+            version = "9.4.53.v20231009",
         ),
     ],
     repositories = [
