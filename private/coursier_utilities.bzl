@@ -32,7 +32,6 @@ SUPPORTED_PACKAGING_TYPES = [
     "dylib",
     "so",
     "dll",
-    "pom",
 ]
 
 # See https://github.com/bazelbuild/rules_jvm_external/issues/686
