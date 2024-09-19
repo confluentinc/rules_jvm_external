@@ -11,7 +11,6 @@ def unpack_coordinates(coords):
         return None
     if type(coords) == "struct":
         return coords
-    print("Unpacking coordinates: %s" % coords)
 
     parts = coords.split(":")
     nparts = len(parts)
