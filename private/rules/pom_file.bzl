@@ -17,7 +17,8 @@ def _pom_file_impl(ctx):
             fail("exclusions key %s not found in dependencies %s" % (target, info.label_to_javainfo.keys()))
         else:
             coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
-            return unpack_coordinates(coords)
+            # return unpack_coordinates(coords)
+            return coords
 
     exclusions = {
         get_exclusion_coordinates(target): json.decode(targetExclusions)
@@ -32,11 +33,11 @@ def _pom_file_impl(ctx):
             all_maven_deps.append(coords)
 
     expanded_maven_deps = [
-        unpack_coordinates(ctx.expand_make_variables("additional_deps", coords, ctx.var))
+        ctx.expand_make_variables("additional_deps", coords, ctx.var)
         for coords in all_maven_deps
     ]
     expanded_runtime_deps = [
-        unpack_coordinates(ctx.expand_make_variables("maven_runtime_deps", coords, ctx.var))
+        ctx.expand_make_variables("maven_runtime_deps", coords, ctx.var)
         for coords in runtime_maven_deps
     ]
 
@@ -46,7 +47,7 @@ def _pom_file_impl(ctx):
     out = generate_pom(
         ctx,
         coordinates = coordinates,
-        versioned_dep_coordinates = expanded_maven_deps,
+        versioned_dep_coordinates = sorted(expanded_maven_deps),
         runtime_deps = expanded_runtime_deps,
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,

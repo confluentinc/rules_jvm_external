@@ -52,6 +52,13 @@ load("@io_bazel_stardoc//:setup.bzl", "stardoc_repositories")
 
 stardoc_repositories()
 
+http_archive(
+    name = "rules_testing",
+    sha256 = "02c62574631876a4e3b02a1820cb51167bb9cdcdea2381b2fa9d9b8b11c407c4",
+    strip_prefix = "rules_testing-0.6.0",
+    url = "https://github.com/bazelbuild/rules_testing/releases/download/v0.6.0/rules_testing-v0.6.0.tar.gz",
+)
+
 # Stardoc also depends on skydoc_repositories, rules_sass, rules_nodejs, but our
 # usage of Stardoc (scripts/generate_docs) doesn't require any of these
 # dependencies. So, we omit them to keep the WORKSPACE file simpler.
@@ -91,6 +98,7 @@ maven_install(
     artifacts = [
         "com.google.guava:guava:31.1-jre",
         "org.hamcrest:hamcrest-core:2.1",
+        "io.netty:netty-tcnative-boringssl-static:2.0.61.Final",
     ],
     maven_install_json = "@rules_jvm_external//:maven_install.json",
     repositories = [
@@ -269,6 +277,8 @@ maven_install(
         "androidx.arch.core:core-testing:aar:2.1.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1028
         "build.buf:protovalidate:0.1.9",
+        # https://github.com/bazelbuild/rules_jvm_external/issues/1250
+        "com.github.spotbugs:spotbugs:4.7.0",
     ],
     fail_if_repin_required = True,
     generate_compat_repositories = True,
@@ -915,3 +925,16 @@ maven_install(
 load("@maven_resolved_with_boms//:defs.bzl", _maven_resolved_maven_install = "pinned_maven_install")
 
 _maven_resolved_maven_install()
+
+# https://github.com/bazelbuild/rules_jvm_external/issues/1206
+maven_install(
+    name = "transitive_dependency_with_type_of_pom",
+    # an arbitrary artifact which depends on org.javamoney:moneta:pom
+    artifacts = [
+        # https://github.com/quarkiverse/quarkus-moneta/blob/2.0.0/runtime/pom.xml#L16-L21
+        "io.quarkiverse.moneta:quarkus-moneta:2.0.0",
+    ],
+    repositories = [
+        "https://repo1.maven.org/maven2",
+    ],
+)

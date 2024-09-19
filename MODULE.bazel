@@ -1,12 +1,16 @@
 module(
     name = "rules_jvm_external",
-    version = "6.3",
+    version = "6.4",
     bazel_compatibility = [">=7.0.0"],
 )
 
 bazel_dep(
+    name = "rules_android",
+    version = "0.1.1",
+)
+bazel_dep(
     name = "bazel_features",
-    version = "1.15.0",
+    version = "1.17.0",
 )
 bazel_dep(
     name = "bazel_skylib",
@@ -17,16 +21,16 @@ bazel_dep(
     version = "0.0.10",
 )
 bazel_dep(
+    name = "rules_license",
+    version = "1.0.0",
+)
+bazel_dep(
     name = "rules_java",
-    version = "7.10.0",
+    version = "7.11.1",
 )
 bazel_dep(
     name = "rules_kotlin",
     version = "1.9.6",
-)
-bazel_dep(
-    name = "rules_android",
-    version = "0.1.1",
 )
 
 bazel_dep(
@@ -168,6 +172,7 @@ dev_maven.install(
     artifacts = [
         "com.google.guava:guava:31.1-jre",
         "org.hamcrest:hamcrest-core:2.1",
+        "io.netty:netty-tcnative-boringssl-static:2.0.61.Final",
     ],
     lock_file = "@rules_jvm_external//:maven_install.json",
     resolver = "coursier",
@@ -309,6 +314,11 @@ dev_maven.install(
     name = "jvm_import_test",
     artifacts = [
         "com.google.code.findbugs:jsr305:3.0.2",
+        "com.android.support:appcompat-v7:aar:28.0.0",
+    ],
+    repositories = [
+        "https://repo1.maven.org/maven2",
+        "https://maven.google.com",
     ],
 )
 dev_maven.install(
@@ -543,6 +553,8 @@ dev_maven.install(
         "androidx.arch.core:core-testing:aar:2.1.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1028
         "build.buf:protovalidate:0.1.9",
+        # https://github.com/bazelbuild/rules_jvm_external/issues/1250
+        "com.github.spotbugs:spotbugs:4.7.0",
     ],
     fail_if_repin_required = True,
     generate_compat_repositories = True,
@@ -711,6 +723,16 @@ dev_maven.install(
     lock_file = "//tests/custom_maven_install:v1_lock_file_format_install.json",
 )
 
+# https://github.com/bazelbuild/rules_jvm_external/issues/1206
+dev_maven.install(
+    name = "transitive_dependency_with_type_of_pom",
+    # an arbitrary artifact which depends on org.javamoney:moneta:pom
+    artifacts = [
+        # https://github.com/quarkiverse/quarkus-moneta/blob/2.0.0/runtime/pom.xml#L16-L21
+        "io.quarkiverse.moneta:quarkus-moneta:2.0.0",
+    ],
+)
+
 # Where there are file locks, the pinned and unpinned repos are listed
 # next to each other. Where compat repositories are created, they are
 # listed next to the repo that created them. The list is otherwise kept
@@ -802,6 +824,7 @@ use_repo(
     # Final entries
     "com_google_http_client_google_http_client",
     "testonly_testing",
+    "transitive_dependency_with_type_of_pom",
     "unpinned_v1_lock_file_format",
     "v1_lock_file_format",
     "version_interval_testing",
