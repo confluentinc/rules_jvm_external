@@ -17,7 +17,8 @@ def _pom_file_impl(ctx):
             fail("exclusions key %s not found in dependencies %s" % (target, info.label_to_javainfo.keys()))
         else:
             coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
-            return unpack_coordinates(coords)
+            # return unpack_coordinates(coords)
+            return coords
 
     exclusions = {
         get_exclusion_coordinates(target): json.decode(targetExclusions)
