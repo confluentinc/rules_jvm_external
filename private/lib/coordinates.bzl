@@ -9,6 +9,8 @@ def unpack_coordinates(coords):
     """
     if not coords:
         return None
+    if type(coords) == "struct":
+        return coords
     print("Unpacking coordinates: %s" % coords)
 
     parts = coords.split(":")
