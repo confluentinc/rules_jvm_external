@@ -9,6 +9,7 @@ def unpack_coordinates(coords):
     """
     if not coords:
         return None
+    print("Unpacking coordinates: %s" % coords)
 
     parts = coords.split(":")
     nparts = len(parts)
