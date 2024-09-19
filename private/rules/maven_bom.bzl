@@ -1,22 +1,14 @@
+load("@bazel_features//:features.bzl", "bazel_features")
+load("//private/lib:coordinates.bzl", "unpack_coordinates")
 load(":maven_bom_fragment.bzl", "MavenBomFragmentInfo")
 load(":maven_publish.bzl", "maven_publish")
-load(":maven_utils.bzl", "generate_pom", "unpack_coordinates")
-
-_NON_EXISTENT_LABEL = Label("//:thisdoesnotexistinrulesjvmexternal")
-
-def _is_using_bzlmod():
-    # There's no easy way in a macro to tell if you're using bzlmod. We can't
-    # depend on Bazel version number because `--noenable_bzlmod` may have been
-    # used. Instead, try and stringify a label we know doesn't exist. When
-    # bzlmod is in play, we'll get `[unknown repo` in the value. When it is not
-    # we get the label as we expect it to be.
-    return str(_NON_EXISTENT_LABEL).startswith("@@")
+load(":maven_utils.bzl", "generate_pom")
 
 def _label(label_or_string):
     if type(label_or_string) == "Label":
         return label_or_string
 
-    workspace_prefix = "@@" if _is_using_bzlmod() else "@"
+    workspace_prefix = "@@" if bazel_features.external_deps.is_bzlmod_enabled else "@"
 
     if type(label_or_string) == "string":
         # We may have a target of the form: `@bar//foo`, `//foo`, `//foo:foo`, `:foo`, `foo`
@@ -41,7 +33,7 @@ def _maven_bom_impl(ctx):
     bom = generate_pom(
         ctx,
         coordinates = coordinates,
-        versioned_dep_coordinates = [unpack_coordinates(f[MavenBomFragmentInfo].coordinates) for f in ctx.attr.fragments],
+        versioned_dep_coordinates = [f[MavenBomFragmentInfo].coordinates for f in ctx.attr.fragments],
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
     )
@@ -77,22 +69,14 @@ def _maven_dependencies_bom_impl(ctx):
     # included in the main BOM
     first_order_deps = [f[MavenBomFragmentInfo].coordinates for f in ctx.attr.fragments]
     all_deps = depset(transitive = [f.maven_info.maven_deps for f in fragments]).to_list()
-    combined_deps = [unpack_coordinates(a) for a in all_deps if a not in first_order_deps]
+    combined_deps = [a for a in all_deps if a not in first_order_deps]
 
     unpacked = unpack_coordinates(ctx.attr.bom_coordinates)
-    unpacked = struct(
-        groupId = unpacked.groupId,
-        artifactId = unpacked.artifactId,
-        type = "pom",
-        scope = "import",
-        classifier = unpacked.classifier,
-        version = unpacked.version,
-    )
 
     dependencies_bom = generate_pom(
         ctx,
         coordinates = ctx.attr.maven_coordinates,
-        versioned_dep_coordinates = combined_deps + [unpacked],
+        versioned_dep_coordinates = combined_deps + ["%s:%s:pom:import:%s" % (unpacked.groupId, unpacked.artifactId, unpacked.version)],
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
         indent = 12,
@@ -187,13 +171,9 @@ def maven_bom(
 
     # `same_package_label` doesn't exist in Bazel 5, but we still support it
     # so we check the version here to call a non-deprecated API in recent
-    # Bazel versions, or the older (deprecated) API in Bazel 5. Now, normally
-    # we'd use Skylib's `version` but that needs `native.bazel_version` to be
-    # present, and that's not available to macros. Instead, see whether what
-    # we need is present. Pulling in `bazel_features` for this check seems like
-    # overkill, especially since we'd need to land a patch in it before we
-    # could check this feature. Doing this the Not Invented Here way for now.
-    if "same_package_label" in dir(_NON_EXISTENT_LABEL):
+    # Bazel versions, or the older (deprecated) API in Bazel 5.
+    feature_check_label = Label("//:doesnotexistinrulesjvmexternal")
+    if hasattr(feature_check_label, "same_package_label"):
         fragments = [l.same_package_label("%s.bom-fragment" % l.name) for l in labels]
     else:
         # TODO: Drop this branch once we drop Bazel 5 support

@@ -12,6 +12,8 @@ bzl_library(
     srcs = [
         ":defs.bzl",
         ":specs.bzl",
+        "@bazel_features//:bzl_files",
+        "@rules_license//:docs_deps",
     ],
     visibility = [
         # This library is only visible to allow others who depend on

@@ -251,6 +251,23 @@ function test_maven_resolution() {
     bazel run @maven_resolved_with_boms//:pin >> "$TEST_LOG" 2>&1
 }
 
+function test_transitive_dependency_with_type_of_pom {
+  # transitive_dependency_with_type_of_pom installs an artifact which depends on
+  # org.javamoney:moneta:pom, which should expand into the transitive
+  # dependencies of that type=pom artifact, such as
+  # org.javamoney.moneta:moneta-core
+  bazel query @transitive_dependency_with_type_of_pom//:org_javamoney_moneta_moneta_core >> "$TEST_LOG" 2>&1
+}
+
+function test_when_both_pom_and_artifact_are_available_jar_artifact_is_present {
+  # The `maven_coordinates` of the target should be set to the coordinates of the jar
+  # If the `pom` classifier is asked for, something has gone wrong and no results will
+  # match
+  bazel query 'attr(tags, "com.github.spotbugs:spotbugs:4.7.0", @regression_testing_coursier//:com_github_spotbugs_spotbugs)' >> "$TEST_LOG" 2>&1
+
+  expect_log "@regression_testing_coursier//:com_github_spotbugs_spotbugs"
+}
+
 TESTS=(
   "test_maven_resolution"
   "test_dependency_aggregation"
@@ -268,6 +285,8 @@ TESTS=(
   "test_unpinned_found_artifact_with_plus_through_pin_and_build"
   "test_v1_lock_file_format"
   "test_dependency_pom_exclusion"
+  "test_transitive_dependency_with_type_of_pom"
+  "test_when_both_pom_and_artifact_are_available_jar_artifact_is_present"
 )
 
 function run_tests() {

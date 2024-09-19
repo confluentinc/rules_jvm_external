@@ -21,7 +21,7 @@ DEFAULT_NAME = "maven"
 
 _DEFAULT_RESOLVER = "coursier"
 
-_artifact = tag_class(
+artifact = tag_class(
     attrs = {
         "name": attr.string(default = DEFAULT_NAME),
         "group": attr.string(mandatory = True),
@@ -36,7 +36,7 @@ _artifact = tag_class(
     },
 )
 
-_install = tag_class(
+install = tag_class(
     attrs = {
         "name": attr.string(default = DEFAULT_NAME),
 
@@ -113,7 +113,7 @@ _install = tag_class(
     },
 )
 
-_override = tag_class(
+override = tag_class(
     attrs = {
         "name": attr.string(default = DEFAULT_NAME),
         "coordinates": attr.string(doc = "Maven artifact tuple in `artifactId:groupId` format", mandatory = True),
@@ -194,7 +194,7 @@ def _generate_compat_repos(name, existing_compat_repos, artifacts):
 
     return seen
 
-def _maven_impl(mctx):
+def maven_impl(mctx):
     repos = {}
     overrides = {}
     exclusions = {}
@@ -434,10 +434,12 @@ def _maven_impl(mctx):
                 additional_coursier_options = repo.get("additional_coursier_options"),
             )
         else:
+            workspace_prefix = "@@" if bazel_features.external_deps.is_bzlmod_enabled else "@"
+
             # Only the coursier resolver allows the lock file to be omitted.
             unpinned_maven_pin_command_alias(
                 name = "unpinned_" + name,
-                alias = "@%s//:pin" % name,
+                alias = "%s%s//:pin" % (workspace_prefix, name),
             )
 
         if repo.get("generate_compat_repositories") and not repo.get("lock_file"):
@@ -509,10 +511,10 @@ def _maven_impl(mctx):
         return None
 
 maven = module_extension(
-    _maven_impl,
+    maven_impl,
     tag_classes = {
-        "artifact": _artifact,
-        "install": _install,
-        "override": _override,
+        "artifact": artifact,
+        "install": install,
+        "override": override,
     },
 )
