@@ -16,6 +16,7 @@ def scala_export(
         visibility = None,
         tags = [],
         testonly = None,
+        publish_maven_metadata = False,
         **kwargs):
     """Extends `scala_library` to allow maven artifacts to be uploaded. This
     rule is the Scala version of `java_export`.
@@ -64,6 +65,7 @@ def scala_export(
       pom_template: The template to be used for the pom.xml file.
       deploy_env: A list of labels of java targets to exclude from the generated jar
       visibility: The visibility of the target
+      publish_maven_metadata: Whether to publish a maven-metadata.xml
       kwargs: These are passed to [`scala_library`](https://github.com/bazelbuild/rules_scala/blob/master/docs/scala_library.md),
         and so may contain any valid parameter for that rule.
     """
@@ -98,4 +100,5 @@ def scala_export(
         tags = tags,
         testonly = testonly,
         javadocopts = javadocopts,
+        publish_maven_metadata = publish_maven_metadata,
     )
