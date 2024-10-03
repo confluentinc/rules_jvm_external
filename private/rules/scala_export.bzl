@@ -16,7 +16,7 @@ def scala_export(
         visibility = None,
         tags = [],
         testonly = None,
-        publish_maven_metadata = False,
+        publish_maven_metadata = True,
         **kwargs):
     """Extends `scala_library` to allow maven artifacts to be uploaded. This
     rule is the Scala version of `java_export`.

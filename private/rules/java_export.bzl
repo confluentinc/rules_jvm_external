@@ -17,7 +17,7 @@ def java_export(
         tags = [],
         testonly = None,
         classifier_artifacts = {},
-        publish_maven_metadata = False,
+        publish_maven_metadata = True,
         **kwargs):
     """Extends `java_library` to allow maven artifacts to be uploaded.
 
@@ -144,7 +144,7 @@ def maven_export(
         doc_deps = [],
         doc_url = "",
         doc_resources = [],
-        publish_maven_metadata = False,
+        publish_maven_metadata = True,
         toolchains = None):
     """
     All arguments are the same as java_export with the addition of:
