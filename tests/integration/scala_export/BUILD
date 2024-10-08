@@ -61,3 +61,18 @@ diff_test(
     file1 = ":test-pom",
     file2 = "pom.golden.xml",
 )
+
+genrule(
+    name = "list-scaladocs",
+    srcs = [
+        ":test-scaladocs",
+    ],
+    outs = ["scaladocs.txt"],
+    cmd = "for SRC in $(SRCS); do jar tf $$SRC >> $@; done",
+)
+
+diff_test(
+    name = "validate-scaladocs",
+    file1 = ":scaladocs.txt",
+    file2 = "scaladocs.golden.txt",
+)

@@ -1,6 +1,9 @@
-load("@io_bazel_rules_scala//scala:scala.bzl", "scala_library")
+load("@bazel_skylib//rules:run_binary.bzl", "run_binary")
+load("@io_bazel_rules_scala//scala:scala.bzl", "make_scala_doc_rule", "scala_library", "scaladoc_intransitive_aspect")
 load(":java_export.bzl", "maven_export")
 load(":maven_project_jar.bzl", "DEFAULT_EXCLUDED_WORKSPACES")
+
+scala_doc = make_scala_doc_rule(aspect = scaladoc_intransitive_aspect)
 
 SCALA_LIBS = [
     "@io_bazel_rules_scala_scala_library//jar",
@@ -52,10 +55,12 @@ def scala_export(
         as a dependency of the artifact being generated.
 
     To skip generation of the javadoc jar, add the `no-javadocs` tag to the target.
+    To skip generation of the scaladoc jar, add the `no-scaladocs` tag to the target.
 
     Generated rules:
       * `name`: A `scala_library` that other rules can depend upon.
       * `name-docs`: A javadoc jar file.
+      * `name-scaladocs`: A scaladoc jar file.
       * `name-pom`: The pom.xml file.
       * `name.publish`: To be executed by `bazel run` to publish to a maven repo.
 
@@ -69,11 +74,11 @@ def scala_export(
       kwargs: These are passed to [`scala_library`](https://github.com/bazelbuild/rules_scala/blob/master/docs/scala_library.md),
         and so may contain any valid parameter for that rule.
     """
-
     maven_coordinates_tags = ["maven_coordinates=%s" % maven_coordinates]
     lib_name = "%s-lib" % name
 
     javadocopts = kwargs.pop("javadocopts", None)
+    doc_resources = kwargs.pop("doc_resources", [])
     classifier_artifacts = kwargs.pop("classifier_artifacts", {})
 
     updated_deploy_env = [] + deploy_env
@@ -88,6 +93,29 @@ def scala_export(
         **kwargs
     )
 
+    if "no-scaladocs" not in tags:
+        scaladocs_name = name + "-scaladocs-html"
+        scala_doc(
+            name = scaladocs_name,
+            deps = [":" + lib_name],
+        )
+
+        scaladocs_jar_name = name + "-scaladocs"
+        run_binary(
+            name = scaladocs_jar_name,
+            srcs = [":" + scaladocs_name] + doc_resources,
+            outs = [name + "-scaladocs.jar"],
+            args = [
+                "$(location " + name + "-scaladocs.jar)",  # output jar
+                "$(location :" + scaladocs_name + ")",  # input directory
+            ] + [
+                "$(location " + resource + ")"
+                for resource in doc_resources
+            ],  # extra resources
+            tool = "@rules_jvm_external//private/tools/java/com/github/bazelbuild/rules_jvm_external/javadoc:create_jar",
+        )
+        classifier_artifacts["scaladoc"] = scaladocs_jar_name
+
     maven_export(
         name = name,
         maven_coordinates = maven_coordinates,
@@ -100,5 +128,6 @@ def scala_export(
         tags = tags,
         testonly = testonly,
         javadocopts = javadocopts,
+        doc_resources = doc_resources,
         publish_maven_metadata = publish_maven_metadata,
     )

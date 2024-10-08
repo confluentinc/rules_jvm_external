@@ -17,15 +17,16 @@
 
 package com.github.bazelbuild.rules_jvm_external.javadoc;
 
-import static java.lang.Runtime.Version;
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import com.github.bazelbuild.rules_jvm_external.ByteStreams;
-import com.github.bazelbuild.rules_jvm_external.zip.StableZipEntry;
+
+import javax.tools.DocumentationTool;
+import javax.tools.JavaFileObject;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.StandardLocation;
+import javax.tools.ToolProvider;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
@@ -42,15 +43,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
-import javax.tools.DocumentationTool;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.StandardLocation;
-import javax.tools.ToolProvider;
+
+import static java.lang.Runtime.Version;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class JavadocJarMaker {
 
@@ -203,37 +201,7 @@ public class JavadocJarMaker {
         Files.createFile(generatedElementList);
       }
 
-      try (OutputStream os = Files.newOutputStream(out);
-          ZipOutputStream zos = new ZipOutputStream(os);
-          Stream<Path> walk = Files.walk(outputTo)) {
-
-        walk.sorted(Comparator.naturalOrder())
-            .forEachOrdered(
-                path -> {
-                  if (path.equals(outputTo)) {
-                    return;
-                  }
-
-                  try {
-                    if (Files.isDirectory(path)) {
-                      String name = outputTo.relativize(path) + "/";
-                      ZipEntry entry = new StableZipEntry(name);
-                      zos.putNextEntry(entry);
-                      zos.closeEntry();
-                    } else {
-                      String name = outputTo.relativize(path).toString();
-                      ZipEntry entry = new StableZipEntry(name);
-                      zos.putNextEntry(entry);
-                      try (InputStream is = Files.newInputStream(path)) {
-                        ByteStreams.copy(is, zos);
-                      }
-                      zos.closeEntry();
-                    }
-                  } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                  }
-                });
-      }
+      CreateJar.createJar(out, outputTo);
     }
     tempDirs.forEach(JavadocJarMaker::delete);
   }
