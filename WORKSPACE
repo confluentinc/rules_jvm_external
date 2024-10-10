@@ -859,7 +859,7 @@ http_archive(
 maven_install(
     name = "java_export_exclusion_testing",
     artifacts = [
-        "com.google.protobuf:protobuf-java:3.23.1",
+        "com.google.protobuf:protobuf-java:3.25.5",
     ],
     maven_install_json = "@rules_jvm_external//tests/custom_maven_install:java_export_exclusion_testing_install.json",
     repositories = [
