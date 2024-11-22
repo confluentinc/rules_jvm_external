@@ -36,8 +36,28 @@ _EMPTY_INFO = MavenInfo(
     transitive_exports = depset(),
 )
 
+_STOPPED_INFO = MavenInfo(
+    coordinates = "STOPPED",
+    maven_deps = depset(),
+    as_maven_dep = depset(),
+    artifact_infos = depset(),
+    dep_infos = depset(),
+    label_to_javainfo = {},
+    transitive_exports = depset(),
+)
+
 _MAVEN_PREFIX = "maven_coordinates="
-_STOP_TAGS = ["maven:compile-only", "maven:compile_only", "no-maven"]
+
+# This compile-only tags are used to filter
+# out the maven modules that shouldn't appear in the pom.
+# Something like this is still needed.
+# But these are also getting filtered out in the project jar
+# generation, which seems to be the cause of the docs breakage.
+_STOP_TAGS = [
+    "maven:compile-only",
+    "maven:compile_only",
+    "no-maven",
+]
 
 def read_coordinates(tags):
     coordinates = []
@@ -81,14 +101,24 @@ def calculate_artifact_jars(maven_info):
     all_jars = _flatten([i.transitive_runtime_jars for i in maven_info.artifact_infos.to_list()])
     dep_jars = _flatten([i.transitive_runtime_jars for i in maven_info.dep_infos.to_list()])
 
-    return _set_diff(all_jars, dep_jars)
+    #    print("all_jars", all_jars)
+    #    print("dep_jars", dep_jars)
+    diff = _set_diff(all_jars, dep_jars)
+
+    #    print("artifact_jars", diff)
+    return diff
 
 def calculate_artifact_source_jars(maven_info):
     """Calculate the actual jars to include in a maven artifact"""
     all_jars = _flatten([i.transitive_source_jars for i in maven_info.artifact_infos.to_list()])
     dep_jars = _flatten([i.transitive_source_jars for i in maven_info.dep_infos.to_list()])
 
-    return _set_diff(all_jars, dep_jars)
+    #    print("all_src_jars", all_jars)
+    #    print("dep_src_jars", dep_jars)
+    diff = _set_diff(all_jars, dep_jars)
+
+    #    print("source_jars", diff)
+    return diff
 
 # Used to gather maven data
 _gathered = provider(
@@ -112,9 +142,13 @@ def _extract_from(gathered, maven_info, dep, include_transitive_exports, is_runt
 
     gathered.label_to_javainfo.update(maven_info.label_to_javainfo)
     if java_info:
+        if maven_info.coordinates == "STOPPED":
+            #            print("VR VR VR VR")
+            pass
         if maven_info.coordinates:
             gathered.dep_infos.append(dep[JavaInfo])
         else:
+            #            print("Adding dep", dep)
             gathered.artifact_infos.append(dep[JavaInfo])
             if include_transitive_exports:
                 gathered.transitive_exports.append(maven_info.transitive_exports)
@@ -124,9 +158,13 @@ def _has_maven_deps_impl(target, ctx):
         return [_EMPTY_INFO]
 
     # Check the stop tags first to let us exit quickly.
+
+    # Partially I think the issue comes in here and the gathered.artifact_infos.append line above.
+    # Since we are turning an Empty maven_info, we add an artifact_infos entry for it.
+    # But really, we should be adding neither.
     for tag in ctx.rule.attr.tags:
         if tag in _STOP_TAGS:
-            return _EMPTY_INFO
+            return [_STOPPED_INFO]
 
     coordinates = read_coordinates(ctx.rule.attr.tags)
 

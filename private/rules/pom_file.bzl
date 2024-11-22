@@ -17,6 +17,7 @@ def _pom_file_impl(ctx):
             fail("exclusions key %s not found in dependencies %s" % (target, info.label_to_javainfo.keys()))
         else:
             coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
+
             # return unpack_coordinates(coords)
             return coords
 
@@ -27,6 +28,8 @@ def _pom_file_impl(ctx):
 
     all_maven_deps = info.maven_deps.to_list()
     runtime_maven_deps = info.maven_runtime_deps.to_list()
+
+    #    print(info.maven_deps)
 
     for dep in additional_deps:
         for coords in dep[MavenInfo].as_maven_dep.to_list():
