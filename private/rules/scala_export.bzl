@@ -6,8 +6,8 @@ load(":maven_project_jar.bzl", "DEFAULT_EXCLUDED_WORKSPACES")
 scala_doc = make_scala_doc_rule(aspect = scaladoc_intransitive_aspect)
 
 SCALA_LIBS = [
-    "@io_bazel_rules_scala_scala_library//jar",
-    "@io_bazel_rules_scala_scala_reflect//jar",
+    #    "@io_bazel_rules_scala_scala_library//jar",
+    #    "@io_bazel_rules_scala_scala_reflect//jar",
 ]
 
 def scala_export(
@@ -86,6 +86,8 @@ def scala_export(
     for lib in SCALA_LIBS:
         if lib not in deploy_env:
             updated_deploy_env.append(lib)
+
+    #    print("updated_deploy_env: ", updated_deploy_env)
 
     scala_library(
         name = lib_name,

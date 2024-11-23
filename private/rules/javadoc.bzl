@@ -64,6 +64,9 @@ def _javadoc_impl(ctx):
     for dep in ctx.attr.deps:
         sources.extend(dep[JavaInfo].source_jars)
 
+    #    print(ctx.attr.deps)
+    #    print(sources)
+
     jar_file = ctx.actions.declare_file("%s.jar" % ctx.attr.name)
 
     # This needs to be a in a separate directory as javadoc accepts the containing directory as
