@@ -87,8 +87,6 @@ def scala_export(
         if lib not in deploy_env:
             updated_deploy_env.append(lib)
 
-    #    print("updated_deploy_env: ", updated_deploy_env)
-
     scala_library(
         name = lib_name,
         tags = tags + maven_coordinates_tags,
