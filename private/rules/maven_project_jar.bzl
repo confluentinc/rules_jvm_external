@@ -114,7 +114,6 @@ def _maven_project_jar_impl(ctx):
             ))
 
     src_jar = ctx.actions.declare_file("%s-src.jar" % ctx.label.name)
-
     _combine_jars(
         ctx,
         ctx.executable._merge_jars,

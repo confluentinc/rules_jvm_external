@@ -48,11 +48,6 @@ _STOPPED_INFO = MavenInfo(
 
 _MAVEN_PREFIX = "maven_coordinates="
 
-# This compile-only tags are used to filter
-# out the maven modules that shouldn't appear in the pom.
-# Something like this is still needed.
-# But these are also getting filtered out in the project jar
-# generation, which seems to be the cause of the docs breakage.
 _STOP_TAGS = [
     "maven:compile-only",
     "maven:compile_only",
@@ -100,12 +95,14 @@ def calculate_artifact_jars(maven_info):
     """Calculate the actual jars to include in a maven artifact"""
     all_jars = _flatten([i.transitive_runtime_jars for i in maven_info.artifact_infos.to_list()])
     dep_jars = _flatten([i.transitive_runtime_jars for i in maven_info.dep_infos.to_list()])
+
     return _set_diff(all_jars, dep_jars)
 
 def calculate_artifact_source_jars(maven_info):
     """Calculate the actual jars to include in a maven artifact"""
     all_jars = _flatten([i.transitive_source_jars for i in maven_info.artifact_infos.to_list()])
     dep_jars = _flatten([i.transitive_source_jars for i in maven_info.dep_infos.to_list()])
+
     return _set_diff(all_jars, dep_jars)
 
 # Used to gather maven data
@@ -144,10 +141,13 @@ def _has_maven_deps_impl(target, ctx):
         return [_EMPTY_INFO]
 
     # Check the stop tags first to let us exit quickly.
-
-    # Partially I think the issue comes in here and the gathered.artifact_infos.append line above.
-    # Since we are turning an Empty maven_info, we add an artifact_infos entry for it.
-    # But really, we should be adding neither.
+    # When MavenInfo is set, _extract_from will add the dep to the dep_infos list, propagating
+    # the dependency info to the pom.xml and excluding its jar from the artifact.
+    # If _EMPTY_INFO is used, _extract_from will add the dep to the artifact_infos list, which
+    # will include the jar in the artifact itself.
+    # If _STOPPED_INFO is used, _extract_from will not add the dep to either list. This is useful
+    # when we want to stop the propagation of the dependency info to the pom.xml while also excluding
+    # the jar from the artifact.
     for tag in ctx.rule.attr.tags:
         if tag in _STOP_TAGS:
             return [_STOPPED_INFO]
