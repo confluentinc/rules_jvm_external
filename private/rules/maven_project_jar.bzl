@@ -16,13 +16,11 @@ DEFAULT_EXCLUDED_WORKSPACES = [
 def _strip_excluded_workspace_jars(jar_files, excluded_workspaces):
     to_return = []
 
-    #    print("Stripping jars %s of workspaces %s" % (jar_files, excluded_workspaces))
     for jar in jar_files:
         owner = jar.owner
 
         if owner:
             workspace_name = get_module_name_of_owner_of_repo(owner.workspace_name)
-            #            print("Workspace Name for %s: %s" % (jar, workspace_name))
 
             if workspace_name in excluded_workspaces:
                 continue
@@ -37,8 +35,6 @@ def _combine_jars(ctx, merge_jars, inputs, excludes, output):
     args.add_all(inputs, before_each = "--sources")
     args.add_all(excludes, before_each = "--exclude")
 
-    #    print(inputs)
-    #    print(excludes)
     ctx.actions.run(
         mnemonic = "MergeJars",
         inputs = depset(transitive = [inputs, excludes]),
@@ -62,14 +58,12 @@ def _maven_project_jar_impl(ctx):
         artifact_jars,
         ctx.attr.excluded_workspaces,
     )
-    #    print("artifact_jars", artifact_jars)
 
     artifact_srcs = calculate_artifact_source_jars(info)
     artifact_srcs = _strip_excluded_workspace_jars(
         artifact_srcs,
         ctx.attr.excluded_workspaces,
     )
-    #    print("artifact_srcs", artifact_srcs)
 
     # Merge together all the binary jars
     intermediate_jar = ctx.actions.declare_file("%s.jar" % ctx.label.name)
@@ -121,7 +115,6 @@ def _maven_project_jar_impl(ctx):
 
     src_jar = ctx.actions.declare_file("%s-src.jar" % ctx.label.name)
 
-    #    print(artifact_srcs)
     _combine_jars(
         ctx,
         ctx.executable._merge_jars,

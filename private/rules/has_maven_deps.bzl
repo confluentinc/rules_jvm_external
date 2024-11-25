@@ -100,25 +100,13 @@ def calculate_artifact_jars(maven_info):
     """Calculate the actual jars to include in a maven artifact"""
     all_jars = _flatten([i.transitive_runtime_jars for i in maven_info.artifact_infos.to_list()])
     dep_jars = _flatten([i.transitive_runtime_jars for i in maven_info.dep_infos.to_list()])
-
-    #    print("all_jars", all_jars)
-    #    print("dep_jars", dep_jars)
-    diff = _set_diff(all_jars, dep_jars)
-
-    #    print("artifact_jars", diff)
-    return diff
+    return _set_diff(all_jars, dep_jars)
 
 def calculate_artifact_source_jars(maven_info):
     """Calculate the actual jars to include in a maven artifact"""
     all_jars = _flatten([i.transitive_source_jars for i in maven_info.artifact_infos.to_list()])
     dep_jars = _flatten([i.transitive_source_jars for i in maven_info.dep_infos.to_list()])
-
-    #    print("all_src_jars", all_jars)
-    #    print("dep_src_jars", dep_jars)
-    diff = _set_diff(all_jars, dep_jars)
-
-    #    print("source_jars", diff)
-    return diff
+    return _set_diff(all_jars, dep_jars)
 
 # Used to gather maven data
 _gathered = provider(
@@ -143,12 +131,10 @@ def _extract_from(gathered, maven_info, dep, include_transitive_exports, is_runt
     gathered.label_to_javainfo.update(maven_info.label_to_javainfo)
     if java_info:
         if maven_info.coordinates == "STOPPED":
-            #            print("VR VR VR VR")
             pass
         if maven_info.coordinates:
             gathered.dep_infos.append(dep[JavaInfo])
         else:
-            #            print("Adding dep", dep)
             gathered.artifact_infos.append(dep[JavaInfo])
             if include_transitive_exports:
                 gathered.transitive_exports.append(maven_info.transitive_exports)

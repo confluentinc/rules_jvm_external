@@ -29,8 +29,6 @@ def _pom_file_impl(ctx):
     all_maven_deps = info.maven_deps.to_list()
     runtime_maven_deps = info.maven_runtime_deps.to_list()
 
-    #    print(info.maven_deps)
-
     for dep in additional_deps:
         for coords in dep[MavenInfo].as_maven_dep.to_list():
             all_maven_deps.append(coords)
