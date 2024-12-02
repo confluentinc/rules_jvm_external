@@ -24,10 +24,12 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import javax.tools.ToolProvider;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Reader;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
@@ -41,6 +43,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
@@ -156,17 +159,6 @@ public class JavadocJarMaker {
         return;
       }
 
-      options.add("-sourcepath");
-      options.add(unpackTo.toAbsolutePath().toString());
-
-      options.add("-subpackages");
-      options.add(String.join(":", topLevelPackages));
-
-      if (!excludedPackages.isEmpty()) {
-        options.add("-exclude");
-        options.add(String.join(":", excludedPackages));
-      }
-
       if (!classpath.isEmpty()) {
         options.add("-cp");
         options.add(
@@ -191,6 +183,24 @@ public class JavadocJarMaker {
       tempDirs.add(outputTo);
 
       options.addAll(Arrays.asList("-d", outputTo.toAbsolutePath().toString()));
+
+      // sourcepath and subpackages should work in most cases.
+      // A known edge case is when the package names don't match the directory structure.
+      // For example `OneDep.java` in `tests/integration/maven_bom/OneDep.java` has a package
+      // of "com.github.bazelbuild.rules_jvm_external.example.maven_bom" but the file is in
+      // `tests/integration/maven_bom/OneDep.java`. I added the if/else here to handle that case for now.
+      if (!excludedPackages.isEmpty()) {
+        options.add("-sourcepath");
+        options.add(unpackTo.toAbsolutePath().toString());
+
+        options.add("-subpackages");
+        options.add(String.join(":", topLevelPackages));
+
+        options.add("-exclude");
+        options.add(String.join(":", excludedPackages));
+      } else {
+        sources.forEach(s -> options.add(s.getName()));
+      }
 
       for (Path resource : resources) {
         Path target = outputTo.resolve(resource.getFileName());
@@ -263,16 +273,41 @@ public class JavadocJarMaker {
             ByteStreams.copy(zis, out);
           }
 
-          fileManager.getJavaFileObjects(target.toFile()).forEach(sources::add);
+          fileManager.getJavaFileObjects(target.toFile()).forEach(s -> {
+            sources.add(s);
+            extractPackageName(s).ifPresent(p -> topLevelPackages.add(p.split("\\.")[0]));
+          });
 
-          String[] segments = name.split("/");
-          if (segments.length > 0 && !"META-INF".equals(segments[0])) {
-            topLevelPackages.add(segments[0]);
-          }
+//          String[] segments = name.split("/");
+//          if (segments.length > 0 && !"META-INF".equals(segments[0])) {
+//            topLevelPackages.add(segments[0]);
+//          }
 
           fileNames.add(name);
         }
       }
     }
+  }
+
+  private static Optional<String> extractPackageName(JavaFileObject fileObject) {
+    try (Reader reader = fileObject.openReader(true);
+         BufferedReader bufferedReader = new BufferedReader(reader)) {
+      String line;
+      while ((line = bufferedReader.readLine()) != null) {
+        if (line.startsWith("package ")) {
+          return Optional.of(line.substring("package ".length(), line.indexOf(';')).trim());
+        }
+
+        // Stop looking if we hit the class or interface declaration
+        if (line.startsWith("public") || line.startsWith("class") || line.startsWith("interface") || line.startsWith("enum")) {
+          break;
+        }
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+
+    // default package
+    return Optional.empty();
   }
 }
