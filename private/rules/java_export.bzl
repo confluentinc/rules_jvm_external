@@ -94,6 +94,7 @@ def java_export(
     doc_deps = kwargs.pop("doc_deps", [])
     doc_url = kwargs.pop("doc_url", "")
     doc_resources = kwargs.pop("doc_resources", [])
+    doc_excluded_packages = kwargs.pop("doc_excluded_packages", [])
     toolchains = kwargs.pop("toolchains", [])
 
     # Construct the java_library we'll export from here.
@@ -123,6 +124,7 @@ def java_export(
         doc_deps = doc_deps,
         doc_url = doc_url,
         doc_resources = doc_resources,
+        doc_excluded_packages = doc_excluded_packages,
         toolchains = toolchains,
     )
 
@@ -144,6 +146,7 @@ def maven_export(
         doc_deps = [],
         doc_url = "",
         doc_resources = [],
+        doc_excluded_packages = [],
         publish_maven_metadata = True,
         toolchains = None):
     """
@@ -278,6 +281,7 @@ def maven_export(
             doc_deps = doc_deps,
             doc_url = doc_url,
             doc_resources = doc_resources,
+            excluded_packages = doc_excluded_packages,
             excluded_workspaces = excluded_workspaces.keys(),
             additional_dependencies = additional_dependencies,
             visibility = visibility,

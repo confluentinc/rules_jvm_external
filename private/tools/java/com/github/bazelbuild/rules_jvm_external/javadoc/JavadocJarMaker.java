@@ -61,6 +61,7 @@ public class JavadocJarMaker {
     Path out = null;
     Path elementList = null;
     Set<Path> classpath = new HashSet<>();
+    Set<String> excludedPackages = new HashSet<>();
     List<String> options = new ArrayList<>();
 
     for (int i = 0; i < args.length; i++) {
@@ -93,6 +94,11 @@ public class JavadocJarMaker {
           resources.add(Paths.get(next));
           break;
 
+        case "--exclude-packages":
+          next = args[++i];
+          excludedPackages.add(next);
+          break;
+
         default:
           options.add(flag);
           break;
@@ -117,17 +123,17 @@ public class JavadocJarMaker {
     try (StandardJavaFileManager fileManager =
         tool.getStandardFileManager(null, Locale.getDefault(), UTF_8)) {
       fileManager.setLocation(
-          DocumentationTool.Location.DOCUMENTATION_OUTPUT, Arrays.asList(dir.toFile()));
+          DocumentationTool.Location.DOCUMENTATION_OUTPUT, List.of(dir.toFile()));
       fileManager.setLocation(
           StandardLocation.CLASS_PATH,
           classpath.stream().map(Path::toFile).collect(Collectors.toSet()));
 
-      Set<JavaFileObject> sources = new HashSet<>();
-      Set<String> topLevelPackages = new HashSet<>();
-
       Path unpackTo = Files.createTempDirectory("unpacked-sources");
       tempDirs.add(unpackTo);
+      Set<JavaFileObject> sources = new HashSet<>();
+      Set<String> topLevelPackages = new HashSet<>();
       Set<String> fileNames = new HashSet<>();
+
       readSourceFiles(unpackTo, fileManager, sourceJars, sources, topLevelPackages, fileNames);
 
       // True if we're just exporting a set of modules
@@ -148,6 +154,17 @@ public class JavadocJarMaker {
         }
 
         return;
+      }
+
+      options.add("-sourcepath");
+      options.add(unpackTo.toAbsolutePath().toString());
+
+      options.add("-subpackages");
+      options.add(String.join(":", topLevelPackages));
+
+      if (!excludedPackages.isEmpty()) {
+        options.add("-exclude");
+        options.add(String.join(":", excludedPackages));
       }
 
       if (!classpath.isEmpty()) {
@@ -175,8 +192,6 @@ public class JavadocJarMaker {
 
       options.addAll(Arrays.asList("-d", outputTo.toAbsolutePath().toString()));
 
-      sources.forEach(obj -> options.add(obj.getName()));
-
       for (Path resource : resources) {
         Path target = outputTo.resolve(resource.getFileName());
         Files.createDirectories(target.getParent());
@@ -185,7 +200,7 @@ public class JavadocJarMaker {
 
       Writer writer = new StringWriter();
       DocumentationTool.DocumentationTask task =
-          tool.getTask(writer, fileManager, null, null, options, sources);
+          tool.getTask(writer, fileManager, null, null, options, null);
       Boolean result = task.call();
       if (result == null || !result) {
         System.err.println("javadoc " + String.join(" ", options));
