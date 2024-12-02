@@ -7,6 +7,7 @@ java_test(
     deps = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/javadoc",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/javadoc:create_jar_lib",
         "//tests/com/github/bazelbuild/rules_jvm_external:zip_utils",
         artifact(
             "junit:junit",
@@ -23,6 +24,7 @@ java_test(
     deps = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/javadoc",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/javadoc:create_jar_lib",
         "//tests/com/github/bazelbuild/rules_jvm_external:zip_utils",
         artifact(
             "junit:junit",

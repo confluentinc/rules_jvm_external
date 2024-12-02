@@ -40,11 +40,14 @@ public class ExclusionTest {
             inputJar.toAbsolutePath().toString(),
             "--out",
             outputJar.toAbsolutePath().toString(),
+            "--exclude-packages",
+            "com.example.internal",
             "--element-list",
             elementList.toAbsolutePath().toString()
         });
 
     Map<String, String> contents = readJar(outputJar);
-    System.out.println(contents);
+    assert contents.containsKey("com/example/Main.html");
+    assert !contents.containsKey("com/example/internal/InternalThing.html");
   }
 }
