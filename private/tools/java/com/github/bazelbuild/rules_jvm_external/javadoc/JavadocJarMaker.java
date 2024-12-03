@@ -24,10 +24,12 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import javax.tools.ToolProvider;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Reader;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
@@ -41,6 +43,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
@@ -61,8 +64,8 @@ public class JavadocJarMaker {
     Path out = null;
     Path elementList = null;
     Set<Path> classpath = new HashSet<>();
+    Set<String> excludedPackages = new HashSet<>();
     List<String> options = new ArrayList<>();
-
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
       String next;
@@ -93,6 +96,11 @@ public class JavadocJarMaker {
           resources.add(Paths.get(next));
           break;
 
+        case "--exclude-packages":
+          next = args[++i];
+          excludedPackages.add(next);
+          break;
+
         default:
           options.add(flag);
           break;
@@ -117,18 +125,19 @@ public class JavadocJarMaker {
     try (StandardJavaFileManager fileManager =
         tool.getStandardFileManager(null, Locale.getDefault(), UTF_8)) {
       fileManager.setLocation(
-          DocumentationTool.Location.DOCUMENTATION_OUTPUT, Arrays.asList(dir.toFile()));
+          DocumentationTool.Location.DOCUMENTATION_OUTPUT, List.of(dir.toFile()));
       fileManager.setLocation(
           StandardLocation.CLASS_PATH,
           classpath.stream().map(Path::toFile).collect(Collectors.toSet()));
 
-      Set<JavaFileObject> sources = new HashSet<>();
-      Set<String> topLevelPackages = new HashSet<>();
-
       Path unpackTo = Files.createTempDirectory("unpacked-sources");
       tempDirs.add(unpackTo);
+      Set<JavaFileObject> sources = new HashSet<>();
+      Set<String> topLevelPackages = new HashSet<>();
+      Set<String> packages = new HashSet<>();
       Set<String> fileNames = new HashSet<>();
-      readSourceFiles(unpackTo, fileManager, sourceJars, sources, topLevelPackages, fileNames);
+
+      readSourceFiles(unpackTo, fileManager, sourceJars, sources, topLevelPackages, packages, fileNames);
 
       // True if we're just exporting a set of modules
       if (sources.isEmpty()) {
@@ -175,7 +184,23 @@ public class JavadocJarMaker {
 
       options.addAll(Arrays.asList("-d", outputTo.toAbsolutePath().toString()));
 
-      sources.forEach(obj -> options.add(obj.getName()));
+      // sourcepath and subpackages should work in most cases.
+      // A known edge case is when the package names don't match the directory structure.
+      // For example `OneDep.java` in `tests/integration/maven_bom/OneDep.java` has a package
+      // of "com.github.bazelbuild.rules_jvm_external.example.maven_bom" but the file is in
+      // `tests/integration/maven_bom/OneDep.java`. I added the if/else here to handle that case for now.
+      if (!excludedPackages.isEmpty()) {
+        options.add("-sourcepath");
+        options.add(unpackTo.toAbsolutePath().toString());
+
+        options.add("-subpackages");
+        options.add(String.join(":", topLevelPackages));
+
+        options.add("-exclude");
+        options.add(String.join(":", expandExcludedPackages(excludedPackages, packages)));
+      } else {
+        sources.forEach(s -> options.add(s.getName()));
+      }
 
       for (Path resource : resources) {
         Path target = outputTo.resolve(resource.getFileName());
@@ -185,7 +210,7 @@ public class JavadocJarMaker {
 
       Writer writer = new StringWriter();
       DocumentationTool.DocumentationTask task =
-          tool.getTask(writer, fileManager, null, null, options, sources);
+          tool.getTask(writer, fileManager, null, null, options, null);
       Boolean result = task.call();
       if (result == null || !result) {
         System.err.println("javadoc " + String.join(" ", options));
@@ -223,6 +248,7 @@ public class JavadocJarMaker {
       Set<Path> sourceJars,
       Set<JavaFileObject> sources,
       Set<String> topLevelPackages,
+      Set<String> packages,
       Set<String> fileNames)
       throws IOException {
 
@@ -248,16 +274,59 @@ public class JavadocJarMaker {
             ByteStreams.copy(zis, out);
           }
 
-          fileManager.getJavaFileObjects(target.toFile()).forEach(sources::add);
-
-          String[] segments = name.split("/");
-          if (segments.length > 0 && !"META-INF".equals(segments[0])) {
-            topLevelPackages.add(segments[0]);
-          }
+          fileManager.getJavaFileObjects(target.toFile()).forEach(s -> {
+            sources.add(s);
+            extractPackageName(s).ifPresent(p -> {
+              topLevelPackages.add(p.split("\\.")[0]);
+              packages.add(p);
+              });
+          });
 
           fileNames.add(name);
         }
       }
     }
+  }
+
+  // If the package ends in .* , then look for all subpackages in packages set
+  private static Set<String> expandExcludedPackages(Set<String> excludedPackages, Set<String> packages) {
+    Set<String> expandedPackages = new HashSet<>();
+
+    for (String excludedPackage : excludedPackages) {
+      if (excludedPackage.endsWith(".*")) {
+        String basePackage = excludedPackage.substring(0, excludedPackage.length() - 2);
+        for (String pkg : packages) {
+          if (pkg.startsWith(basePackage)) {
+            expandedPackages.add(pkg);
+          }
+        }
+      } else {
+        expandedPackages.add(excludedPackage);
+      }
+    }
+
+    return expandedPackages;
+  }
+
+  private static Optional<String> extractPackageName(JavaFileObject fileObject) {
+    try (Reader reader = fileObject.openReader(true);
+         BufferedReader bufferedReader = new BufferedReader(reader)) {
+      String line;
+      while ((line = bufferedReader.readLine()) != null) {
+        if (line.startsWith("package ")) {
+          return Optional.of(line.substring("package ".length(), line.indexOf(';')).trim());
+        }
+
+        // Stop looking if we hit the class or interface declaration
+        if (line.startsWith("public") || line.startsWith("class") || line.startsWith("interface") || line.startsWith("enum")) {
+          break;
+        }
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+
+    // default package
+    return Optional.empty();
   }
 }

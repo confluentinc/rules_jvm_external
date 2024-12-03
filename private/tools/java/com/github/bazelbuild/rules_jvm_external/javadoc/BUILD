@@ -1,6 +1,9 @@
 java_library(
     name = "create_jar_lib",
     srcs = ["CreateJar.java"],
+    visibility = [
+        "//visibility:public",
+    ],
     deps = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/zip",
