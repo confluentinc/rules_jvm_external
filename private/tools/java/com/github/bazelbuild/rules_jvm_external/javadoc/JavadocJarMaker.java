@@ -66,7 +66,6 @@ public class JavadocJarMaker {
     Set<Path> classpath = new HashSet<>();
     Set<String> excludedPackages = new HashSet<>();
     List<String> options = new ArrayList<>();
-
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
       String next;
@@ -135,9 +134,10 @@ public class JavadocJarMaker {
       tempDirs.add(unpackTo);
       Set<JavaFileObject> sources = new HashSet<>();
       Set<String> topLevelPackages = new HashSet<>();
+      Set<String> packages = new HashSet<>();
       Set<String> fileNames = new HashSet<>();
 
-      readSourceFiles(unpackTo, fileManager, sourceJars, sources, topLevelPackages, fileNames);
+      readSourceFiles(unpackTo, fileManager, sourceJars, sources, topLevelPackages, packages, fileNames);
 
       // True if we're just exporting a set of modules
       if (sources.isEmpty()) {
@@ -197,7 +197,7 @@ public class JavadocJarMaker {
         options.add(String.join(":", topLevelPackages));
 
         options.add("-exclude");
-        options.add(String.join(":", excludedPackages));
+        options.add(String.join(":", expandExcludedPackages(excludedPackages, packages)));
       } else {
         sources.forEach(s -> options.add(s.getName()));
       }
@@ -248,6 +248,7 @@ public class JavadocJarMaker {
       Set<Path> sourceJars,
       Set<JavaFileObject> sources,
       Set<String> topLevelPackages,
+      Set<String> packages,
       Set<String> fileNames)
       throws IOException {
 
@@ -275,18 +276,36 @@ public class JavadocJarMaker {
 
           fileManager.getJavaFileObjects(target.toFile()).forEach(s -> {
             sources.add(s);
-            extractPackageName(s).ifPresent(p -> topLevelPackages.add(p.split("\\.")[0]));
+            extractPackageName(s).ifPresent(p -> {
+              topLevelPackages.add(p.split("\\.")[0]);
+              packages.add(p);
+              });
           });
-
-//          String[] segments = name.split("/");
-//          if (segments.length > 0 && !"META-INF".equals(segments[0])) {
-//            topLevelPackages.add(segments[0]);
-//          }
 
           fileNames.add(name);
         }
       }
     }
+  }
+
+  // If the package ends in .* , then look for all subpackages in packages set
+  private static Set<String> expandExcludedPackages(Set<String> excludedPackages, Set<String> packages) {
+    Set<String> expandedPackages = new HashSet<>();
+
+    for (String excludedPackage : excludedPackages) {
+      if (excludedPackage.endsWith(".*")) {
+        String basePackage = excludedPackage.substring(0, excludedPackage.length() - 2);
+        for (String pkg : packages) {
+          if (pkg.startsWith(basePackage)) {
+            expandedPackages.add(pkg);
+          }
+        }
+      } else {
+        expandedPackages.add(excludedPackage);
+      }
+    }
+
+    return expandedPackages;
   }
 
   private static Optional<String> extractPackageName(JavaFileObject fileObject) {
