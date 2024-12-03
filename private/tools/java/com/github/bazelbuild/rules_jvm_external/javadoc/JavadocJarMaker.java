@@ -189,7 +189,6 @@ public class JavadocJarMaker {
       // For example `OneDep.java` in `tests/integration/maven_bom/OneDep.java` has a package
       // of "com.github.bazelbuild.rules_jvm_external.example.maven_bom" but the file is in
       // `tests/integration/maven_bom/OneDep.java`. I added the if/else here to handle that case for now.
-      // TODO: Is this edge case still a problem?
       if (!excludedPackages.isEmpty()) {
         options.add("-sourcepath");
         options.add(unpackTo.toAbsolutePath().toString());
