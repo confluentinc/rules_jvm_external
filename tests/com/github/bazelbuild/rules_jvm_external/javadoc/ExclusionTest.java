@@ -115,4 +115,40 @@ public class ExclusionTest {
     assert !contents.containsKey("com/example/processor/internal/InternalProcessor.html");
     assert !contents.containsKey("com/example/processor/internal/other/OtherProcessor.html");
   }
+
+  @Test
+  public void testJavadocPackageToplevelExcluded() throws IOException {
+    Path inputJar = temp.newFile("in.jar").toPath();
+    Path outputJar = temp.newFile("out.jar").toPath();
+    Path elementList = temp.newFile("element-list").toPath();
+    // deleting the file since JavadocJarMaker fails on existing files, we just need to supply the
+    // path.
+    elementList.toFile().delete();
+
+    createJar(
+        inputJar,
+        ImmutableMap.of(
+            "com/example/Main.java",
+            "package com.example; public class Main { public static void main(String[] args) {} }",
+            "io/example/processor/Processor.java",
+            "package io.example.processor; public class Processor {}"
+        ));
+
+    JavadocJarMaker.main(
+        new String[] {
+            "--in",
+            inputJar.toAbsolutePath().toString(),
+            "--out",
+            outputJar.toAbsolutePath().toString(),
+            "--exclude-packages",
+            "io.example.*",
+            "--element-list",
+            elementList.toAbsolutePath().toString()
+        });
+
+    Map<String, String> contents = readJar(outputJar);
+
+    assert contents.containsKey("com/example/Main.html");
+    assert !contents.containsKey("io/example/processor/Processor.html");
+  }
 }

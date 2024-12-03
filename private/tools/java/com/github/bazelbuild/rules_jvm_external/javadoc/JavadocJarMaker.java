@@ -40,10 +40,11 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
@@ -132,12 +133,11 @@ public class JavadocJarMaker {
 
       Path unpackTo = Files.createTempDirectory("unpacked-sources");
       tempDirs.add(unpackTo);
-      Set<JavaFileObject> sources = new HashSet<>();
-      Set<String> topLevelPackages = new HashSet<>();
-      Set<String> packages = new HashSet<>();
-      Set<String> fileNames = new HashSet<>();
-
-      readSourceFiles(unpackTo, fileManager, sourceJars, sources, topLevelPackages, packages, fileNames);
+      Map<String, List<JavaFileObject>> sources = new HashMap<>();
+      readSourceFiles(unpackTo, fileManager, sourceJars, sources);
+      Set<String> expandedExcludedPackages = expandExcludedPackages(excludedPackages, sources.keySet());
+      filterExcludedPackages(unpackTo, sources, expandedExcludedPackages);
+      Set<String> topLevelPackages = sources.keySet().stream().map(p -> p.split("\\.")[0]).collect(Collectors.toSet());
 
       // True if we're just exporting a set of modules
       if (sources.isEmpty()) {
@@ -189,6 +189,7 @@ public class JavadocJarMaker {
       // For example `OneDep.java` in `tests/integration/maven_bom/OneDep.java` has a package
       // of "com.github.bazelbuild.rules_jvm_external.example.maven_bom" but the file is in
       // `tests/integration/maven_bom/OneDep.java`. I added the if/else here to handle that case for now.
+      // TODO: Is this edge case still a problem?
       if (!excludedPackages.isEmpty()) {
         options.add("-sourcepath");
         options.add(unpackTo.toAbsolutePath().toString());
@@ -196,11 +197,13 @@ public class JavadocJarMaker {
         options.add("-subpackages");
         options.add(String.join(":", topLevelPackages));
 
+        // It might appear that -exclude is not needed since we remove the source files, but without it
+        // empty package info html files will still be generated.
         options.add("-exclude");
-        options.add(String.join(":", expandExcludedPackages(excludedPackages, packages)));
-      } else {
-        sources.forEach(s -> options.add(s.getName()));
+        options.add(String.join(":", expandedExcludedPackages));
       }
+
+      sources.values().stream().flatMap(List::stream).forEach(s -> options.add(s.getName()));
 
       for (Path resource : resources) {
         Path target = outputTo.resolve(resource.getFileName());
@@ -246,10 +249,7 @@ public class JavadocJarMaker {
       Path unpackTo,
       StandardJavaFileManager fileManager,
       Set<Path> sourceJars,
-      Set<JavaFileObject> sources,
-      Set<String> topLevelPackages,
-      Set<String> packages,
-      Set<String> fileNames)
+      Map<String, List<JavaFileObject>> sources)
       throws IOException {
 
     for (Path jar : sourceJars) {
@@ -275,14 +275,9 @@ public class JavadocJarMaker {
           }
 
           fileManager.getJavaFileObjects(target.toFile()).forEach(s -> {
-            sources.add(s);
-            extractPackageName(s).ifPresent(p -> {
-              topLevelPackages.add(p.split("\\.")[0]);
-              packages.add(p);
-              });
+            String p = extractPackageName(s);
+            sources.computeIfAbsent(p, k -> new ArrayList<>()).add(s);
           });
-
-          fileNames.add(name);
         }
       }
     }
@@ -308,13 +303,14 @@ public class JavadocJarMaker {
     return expandedPackages;
   }
 
-  private static Optional<String> extractPackageName(JavaFileObject fileObject) {
+  // Extract the package name from the contents of the file
+  private static String extractPackageName(JavaFileObject fileObject) {
     try (Reader reader = fileObject.openReader(true);
          BufferedReader bufferedReader = new BufferedReader(reader)) {
       String line;
       while ((line = bufferedReader.readLine()) != null) {
         if (line.startsWith("package ")) {
-          return Optional.of(line.substring("package ".length(), line.indexOf(';')).trim());
+          return line.substring("package ".length(), line.indexOf(';')).trim();
         }
 
         // Stop looking if we hit the class or interface declaration
@@ -327,6 +323,22 @@ public class JavadocJarMaker {
     }
 
     // default package
-    return Optional.empty();
+    return "";
+  }
+
+  private static void filterExcludedPackages(
+      Path unpackTo,
+      Map<String, List<JavaFileObject>> sources,
+      Set<String> expandedExcludedPackages) {
+    for (String excludedPackage : expandedExcludedPackages) {
+      sources.getOrDefault(excludedPackage, new ArrayList<>()).forEach(s -> {
+        try {
+          Files.deleteIfExists(unpackTo.resolve(s.getName()));
+        } catch (IOException e) {
+          throw new UncheckedIOException(e);
+        }
+      });
+      sources.remove(excludedPackage);
+    }
   }
 }
