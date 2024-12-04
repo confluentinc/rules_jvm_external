@@ -17,13 +17,10 @@
 
 package com.github.bazelbuild.rules_jvm_external.javadoc;
 
-import com.github.bazelbuild.rules_jvm_external.ByteStreams;
+import static java.lang.Runtime.Version;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
-import javax.tools.DocumentationTool;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.StandardLocation;
-import javax.tools.ToolProvider;
+import com.github.bazelbuild.rules_jvm_external.ByteStreams;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -50,9 +47,11 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
-
-import static java.lang.Runtime.Version;
-import static java.nio.charset.StandardCharsets.UTF_8;
+import javax.tools.DocumentationTool;
+import javax.tools.JavaFileObject;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.StandardLocation;
+import javax.tools.ToolProvider;
 
 public class JavadocJarMaker {
 
@@ -135,9 +134,11 @@ public class JavadocJarMaker {
       tempDirs.add(unpackTo);
       Map<String, List<JavaFileObject>> sources = new HashMap<>();
       readSourceFiles(unpackTo, fileManager, sourceJars, sources);
-      Set<String> expandedExcludedPackages = expandExcludedPackages(excludedPackages, sources.keySet());
+      Set<String> expandedExcludedPackages =
+          expandExcludedPackages(excludedPackages, sources.keySet());
       filterExcludedPackages(unpackTo, sources, expandedExcludedPackages);
-      Set<String> topLevelPackages = sources.keySet().stream().map(p -> p.split("\\.")[0]).collect(Collectors.toSet());
+      Set<String> topLevelPackages =
+          sources.keySet().stream().map(p -> p.split("\\.")[0]).collect(Collectors.toSet());
 
       // True if we're just exporting a set of modules
       if (sources.isEmpty()) {
@@ -188,7 +189,8 @@ public class JavadocJarMaker {
       // A known edge case is when the package names don't match the directory structure.
       // For example `OneDep.java` in `tests/integration/maven_bom/OneDep.java` has a package
       // of "com.github.bazelbuild.rules_jvm_external.example.maven_bom" but the file is in
-      // `tests/integration/maven_bom/OneDep.java`. I added the condition here to handle that case for now.
+      // `tests/integration/maven_bom/OneDep.java`. I added the condition here to handle that case
+      // for now.
       if (!excludedPackages.isEmpty()) {
         options.add("-sourcepath");
         options.add(unpackTo.toAbsolutePath().toString());
@@ -196,7 +198,8 @@ public class JavadocJarMaker {
         options.add("-subpackages");
         options.add(String.join(":", topLevelPackages));
 
-        // It might appear that -exclude is not needed since we remove the source files, but without it
+        // It might appear that -exclude is not needed since we
+        // remove the source files, but without it
         // empty package info html files will still be generated.
         options.add("-exclude");
         options.add(String.join(":", expandedExcludedPackages));
@@ -273,17 +276,21 @@ public class JavadocJarMaker {
             ByteStreams.copy(zis, out);
           }
 
-          fileManager.getJavaFileObjects(target.toFile()).forEach(s -> {
-            String p = extractPackageName(s);
-            sources.computeIfAbsent(p, k -> new ArrayList<>()).add(s);
-          });
+          fileManager
+              .getJavaFileObjects(target.toFile())
+              .forEach(
+                  s -> {
+                    String p = extractPackageName(s);
+                    sources.computeIfAbsent(p, k -> new ArrayList<>()).add(s);
+                  });
         }
       }
     }
   }
 
   // If the package ends in .* , then look for all subpackages in packages set
-  private static Set<String> expandExcludedPackages(Set<String> excludedPackages, Set<String> packages) {
+  private static Set<String> expandExcludedPackages(
+      Set<String> excludedPackages, Set<String> packages) {
     Set<String> expandedPackages = new HashSet<>();
 
     for (String excludedPackage : excludedPackages) {
@@ -305,7 +312,7 @@ public class JavadocJarMaker {
   // Extract the package name from the contents of the file
   private static String extractPackageName(JavaFileObject fileObject) {
     try (Reader reader = fileObject.openReader(true);
-         BufferedReader bufferedReader = new BufferedReader(reader)) {
+        BufferedReader bufferedReader = new BufferedReader(reader)) {
       String line;
       while ((line = bufferedReader.readLine()) != null) {
         if (line.startsWith("package ")) {
@@ -313,7 +320,10 @@ public class JavadocJarMaker {
         }
 
         // Stop looking if we hit the class or interface declaration
-        if (line.startsWith("public") || line.startsWith("class") || line.startsWith("interface") || line.startsWith("enum")) {
+        if (line.startsWith("public")
+            || line.startsWith("class")
+            || line.startsWith("interface")
+            || line.startsWith("enum")) {
           break;
         }
       }
@@ -330,13 +340,16 @@ public class JavadocJarMaker {
       Map<String, List<JavaFileObject>> sources,
       Set<String> expandedExcludedPackages) {
     for (String excludedPackage : expandedExcludedPackages) {
-      sources.getOrDefault(excludedPackage, new ArrayList<>()).forEach(s -> {
-        try {
-          Files.deleteIfExists(unpackTo.resolve(s.getName()));
-        } catch (IOException e) {
-          throw new UncheckedIOException(e);
-        }
-      });
+      sources
+          .getOrDefault(excludedPackage, new ArrayList<>())
+          .forEach(
+              s -> {
+                try {
+                  Files.deleteIfExists(unpackTo.resolve(s.getName()));
+                } catch (IOException e) {
+                  throw new UncheckedIOException(e);
+                }
+              });
       sources.remove(excludedPackage);
     }
   }

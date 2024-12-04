@@ -1,7 +1,6 @@
 package com.github.bazelbuild.rules_jvm_external.javadoc;
 
 import com.github.bazelbuild.rules_jvm_external.zip.StableZipEntry;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -21,10 +20,7 @@ public class CreateJar {
 
   public static void main(String[] args) throws IOException {
     Path out = Paths.get(args[0]);
-    Set<Path> inputs = Stream.of(args)
-        .skip(1)
-        .map(Paths::get)
-        .collect(Collectors.toSet());
+    Set<Path> inputs = Stream.of(args).skip(1).map(Paths::get).collect(Collectors.toSet());
 
     Path tmpDir = Files.createTempDirectory("create-jar-temp");
     tmpDir.toFile().deleteOnExit();
@@ -57,8 +53,8 @@ public class CreateJar {
 
   public static void createJar(Path out, Path inputDir) throws IOException {
     try (OutputStream os = Files.newOutputStream(out);
-         ZipOutputStream zos = new ZipOutputStream(os);
-         Stream<Path> walk = Files.walk(inputDir)) {
+        ZipOutputStream zos = new ZipOutputStream(os);
+        Stream<Path> walk = Files.walk(inputDir)) {
 
       walk.sorted(Comparator.naturalOrder())
           .forEachOrdered(

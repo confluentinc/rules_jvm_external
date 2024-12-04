@@ -1,20 +1,18 @@
 package com.github.bazelbuild.rules_jvm_external.javadoc;
 
+import static com.github.bazelbuild.rules_jvm_external.ZipUtils.createJar;
+import static com.github.bazelbuild.rules_jvm_external.ZipUtils.readJar;
+
 import com.google.common.collect.ImmutableMap;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Map;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.Map;
-
-import static com.github.bazelbuild.rules_jvm_external.ZipUtils.createJar;
-import static com.github.bazelbuild.rules_jvm_external.ZipUtils.readJar;
-
 public class ExclusionTest {
-  @Rule
-  public TemporaryFolder temp = new TemporaryFolder();
+  @Rule public TemporaryFolder temp = new TemporaryFolder();
 
   @Test
   public void testJavadocPackageExclusion() throws IOException {
@@ -41,23 +39,22 @@ public class ExclusionTest {
             "com/example/query/Query.java",
             "package com.example.query; public class Query {}",
             "com/example/query/internal/InternalQuery.java",
-            "package com.example.query.internal; public class InternalQuery {}"
-        ));
+            "package com.example.query.internal; public class InternalQuery {}"));
 
     JavadocJarMaker.main(
         new String[] {
-            "--in",
-            inputJar.toAbsolutePath().toString(),
-            "--out",
-            outputJar.toAbsolutePath().toString(),
-            "--exclude-packages",
-            "com.example.processor.internal",
-            "--exclude-packages",
-            "com.example.state.internal",
-            "--exclude-packages",
-            "com.example.query.internal",
-            "--element-list",
-            elementList.toAbsolutePath().toString()
+          "--in",
+          inputJar.toAbsolutePath().toString(),
+          "--out",
+          outputJar.toAbsolutePath().toString(),
+          "--exclude-packages",
+          "com.example.processor.internal",
+          "--exclude-packages",
+          "com.example.state.internal",
+          "--exclude-packages",
+          "com.example.query.internal",
+          "--element-list",
+          elementList.toAbsolutePath().toString()
         });
 
     Map<String, String> contents = readJar(outputJar);
@@ -93,19 +90,18 @@ public class ExclusionTest {
             "com/example/processor/internal/InternalProcessor.java",
             "package com.example.processor.internal; public class InternalProcessor {}",
             "com/example/processor/internal/other/OtherProcessor.java",
-            "package com.example.processor.internal.other; public class OtherProcessor {}"
-        ));
+            "package com.example.processor.internal.other; public class OtherProcessor {}"));
 
     JavadocJarMaker.main(
         new String[] {
-            "--in",
-            inputJar.toAbsolutePath().toString(),
-            "--out",
-            outputJar.toAbsolutePath().toString(),
-            "--exclude-packages",
-            "com.example.processor.internal.*",
-            "--element-list",
-            elementList.toAbsolutePath().toString()
+          "--in",
+          inputJar.toAbsolutePath().toString(),
+          "--out",
+          outputJar.toAbsolutePath().toString(),
+          "--exclude-packages",
+          "com.example.processor.internal.*",
+          "--element-list",
+          elementList.toAbsolutePath().toString()
         });
 
     Map<String, String> contents = readJar(outputJar);
@@ -131,19 +127,18 @@ public class ExclusionTest {
             "com/example/Main.java",
             "package com.example; public class Main { public static void main(String[] args) {} }",
             "io/example/processor/Processor.java",
-            "package io.example.processor; public class Processor {}"
-        ));
+            "package io.example.processor; public class Processor {}"));
 
     JavadocJarMaker.main(
         new String[] {
-            "--in",
-            inputJar.toAbsolutePath().toString(),
-            "--out",
-            outputJar.toAbsolutePath().toString(),
-            "--exclude-packages",
-            "io.example.*",
-            "--element-list",
-            elementList.toAbsolutePath().toString()
+          "--in",
+          inputJar.toAbsolutePath().toString(),
+          "--out",
+          outputJar.toAbsolutePath().toString(),
+          "--exclude-packages",
+          "io.example.*",
+          "--element-list",
+          elementList.toAbsolutePath().toString()
         });
 
     Map<String, String> contents = readJar(outputJar);
