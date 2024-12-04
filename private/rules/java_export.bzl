@@ -95,6 +95,7 @@ def java_export(
     doc_url = kwargs.pop("doc_url", "")
     doc_resources = kwargs.pop("doc_resources", [])
     doc_excluded_packages = kwargs.pop("doc_excluded_packages", [])
+    doc_included_packages = kwargs.pop("doc_included_packages", [])
     toolchains = kwargs.pop("toolchains", [])
 
     # Construct the java_library we'll export from here.
@@ -125,6 +126,7 @@ def java_export(
         doc_url = doc_url,
         doc_resources = doc_resources,
         doc_excluded_packages = doc_excluded_packages,
+        doc_included_packages = doc_included_packages,
         toolchains = toolchains,
     )
 
@@ -147,6 +149,7 @@ def maven_export(
         doc_url = "",
         doc_resources = [],
         doc_excluded_packages = [],
+        doc_included_packages = [],
         publish_maven_metadata = True,
         toolchains = None):
     """
@@ -213,6 +216,9 @@ def maven_export(
       doc_excluded_packages: A list of packages to exclude from the generated javadoc. Wildcards are supported at the
         end of the package name. For example, `com.example.*` will exclude all the subpackages of `com.example`, while
         `com.example` will exclude only the files directly in `com.example`
+      doc_included_packages: A list of packages to include in the generated javadoc. Wildcards are supported at the
+        end of the package name. For example, `com.example.*` will include all the subpackages of `com.example`, while
+        `com.example` will include only the files directly in `com.example`
       visibility: The visibility of the target
       publish_maven_metadata: Whether to publish a maven-metadata.xml
       kwargs: These are passed to [`java_library`](https://bazel.build/reference/be/java#java_library),
@@ -285,6 +291,7 @@ def maven_export(
             doc_url = doc_url,
             doc_resources = doc_resources,
             excluded_packages = doc_excluded_packages,
+            included_packages = doc_included_packages,
             excluded_workspaces = excluded_workspaces.keys(),
             additional_dependencies = additional_dependencies,
             visibility = visibility,

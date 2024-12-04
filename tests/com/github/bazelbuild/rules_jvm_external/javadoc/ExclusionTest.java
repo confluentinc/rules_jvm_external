@@ -7,22 +7,31 @@ import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 public class ExclusionTest {
+
+  private Path inputJar;
+  private Path outputJar;
+  private Path elementList;
+
   @Rule public TemporaryFolder temp = new TemporaryFolder();
 
-  @Test
-  public void testJavadocPackageExclusion() throws IOException {
-    Path inputJar = temp.newFile("in.jar").toPath();
-    Path outputJar = temp.newFile("out.jar").toPath();
-    Path elementList = temp.newFile("element-list").toPath();
+  @Before
+  public void setUp() throws IOException {
+    this.inputJar = temp.newFile("in.jar").toPath();
+    this.outputJar = temp.newFile("out.jar").toPath();
+    this.elementList = temp.newFile("element-list").toPath();
     // deleting the file since JavadocJarMaker fails on existing files, we just need to supply the
     // path.
     elementList.toFile().delete();
+  }
 
+  @Test
+  public void testJavadocPackageExclusion() throws IOException {
     createJar(
         inputJar,
         ImmutableMap.of(
@@ -73,13 +82,6 @@ public class ExclusionTest {
 
   @Test
   public void testJavadocPackageExclusionWithAsterisk() throws IOException {
-    Path inputJar = temp.newFile("in.jar").toPath();
-    Path outputJar = temp.newFile("out.jar").toPath();
-    Path elementList = temp.newFile("element-list").toPath();
-    // deleting the file since JavadocJarMaker fails on existing files, we just need to supply the
-    // path.
-    elementList.toFile().delete();
-
     createJar(
         inputJar,
         ImmutableMap.of(
@@ -106,6 +108,7 @@ public class ExclusionTest {
 
     Map<String, String> contents = readJar(outputJar);
 
+    // With asterisk, the "other" subpackage should be excluded as well.
     assert contents.containsKey("com/example/Main.html");
     assert contents.containsKey("com/example/processor/Processor.html");
     assert !contents.containsKey("com/example/processor/internal/InternalProcessor.html");
@@ -114,13 +117,6 @@ public class ExclusionTest {
 
   @Test
   public void testJavadocPackageToplevelExcluded() throws IOException {
-    Path inputJar = temp.newFile("in.jar").toPath();
-    Path outputJar = temp.newFile("out.jar").toPath();
-    Path elementList = temp.newFile("element-list").toPath();
-    // deleting the file since JavadocJarMaker fails on existing files, we just need to supply the
-    // path.
-    elementList.toFile().delete();
-
     createJar(
         inputJar,
         ImmutableMap.of(
@@ -143,7 +139,45 @@ public class ExclusionTest {
 
     Map<String, String> contents = readJar(outputJar);
 
+    // Checking that the toplevel package "io" is excluded. If it wasn't, the javadoc command
+    // would throw an error for -subpackage containing a package that doesn't exist.
     assert contents.containsKey("com/example/Main.html");
     assert !contents.containsKey("io/example/processor/Processor.html");
+  }
+
+  @Test
+  public void testIncludeCombinedWithExclude() throws IOException {
+    createJar(
+        inputJar,
+        ImmutableMap.of(
+            "com/example/Main.java",
+            "package com.example; public class Main { public static void main(String[] args) {} }",
+            "io/example/Thing.java",
+            "package io.example; public class Thing {}",
+            "com/example/internal/InternalThing.java",
+            "package com.example.internal; public class InternalThing {}"));
+
+    JavadocJarMaker.main(
+        new String[] {
+          "--in",
+          inputJar.toAbsolutePath().toString(),
+          "--out",
+          outputJar.toAbsolutePath().toString(),
+          "--exclude-packages",
+          "com.example.internal",
+          "--include-packages",
+          "com.example.*",
+          "--element-list",
+          elementList.toAbsolutePath().toString()
+        });
+
+    Map<String, String> contents = readJar(outputJar);
+
+    // The include gets applied before the exclude.
+    // io.example is not explicitely excluded, but its not in the include list, so it should not
+    // appear.
+    assert contents.containsKey("com/example/Main.html");
+    assert !contents.containsKey("io/example/Thing.html");
+    assert !contents.containsKey("com/example/internal/InternalThing.html");
   }
 }

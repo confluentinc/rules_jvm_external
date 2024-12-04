@@ -65,6 +65,7 @@ public class JavadocJarMaker {
     Path elementList = null;
     Set<Path> classpath = new HashSet<>();
     Set<String> excludedPackages = new HashSet<>();
+    Set<String> includedPackages = new HashSet<>();
     List<String> options = new ArrayList<>();
     for (int i = 0; i < args.length; i++) {
       String flag = args[i];
@@ -101,6 +102,11 @@ public class JavadocJarMaker {
           excludedPackages.add(next);
           break;
 
+        case "--include-packages":
+          next = args[++i];
+          includedPackages.add(next);
+          break;
+
         default:
           options.add(flag);
           break;
@@ -134,9 +140,9 @@ public class JavadocJarMaker {
       tempDirs.add(unpackTo);
       Map<String, List<JavaFileObject>> sources = new HashMap<>();
       readSourceFiles(unpackTo, fileManager, sourceJars, sources);
-      Set<String> expandedExcludedPackages =
-          expandExcludedPackages(excludedPackages, sources.keySet());
-      filterExcludedPackages(unpackTo, sources, expandedExcludedPackages);
+      Set<String> expandedExcludedPackages = expandPackages(excludedPackages, sources.keySet());
+      Set<String> expandedIncludedPackages = expandPackages(includedPackages, sources.keySet());
+      filterPackages(unpackTo, sources, expandedIncludedPackages, expandedExcludedPackages);
       Set<String> topLevelPackages =
           sources.keySet().stream().map(p -> p.split("\\.")[0]).collect(Collectors.toSet());
 
@@ -289,11 +295,10 @@ public class JavadocJarMaker {
   }
 
   // If the package ends in .* , then look for all subpackages in packages set
-  private static Set<String> expandExcludedPackages(
-      Set<String> excludedPackages, Set<String> packages) {
+  private static Set<String> expandPackages(Set<String> wildcardedPackages, Set<String> packages) {
     Set<String> expandedPackages = new HashSet<>();
 
-    for (String excludedPackage : excludedPackages) {
+    for (String excludedPackage : wildcardedPackages) {
       if (excludedPackage.endsWith(".*")) {
         String basePackage = excludedPackage.substring(0, excludedPackage.length() - 2);
         for (String pkg : packages) {
@@ -311,6 +316,7 @@ public class JavadocJarMaker {
 
   // Extract the package name from the contents of the file
   private static String extractPackageName(JavaFileObject fileObject) {
+    Set<String> keywords = Set.of("public", "class", "interface", "enum");
     try (Reader reader = fileObject.openReader(true);
         BufferedReader bufferedReader = new BufferedReader(reader)) {
       String line;
@@ -320,10 +326,7 @@ public class JavadocJarMaker {
         }
 
         // Stop looking if we hit the class or interface declaration
-        if (line.startsWith("public")
-            || line.startsWith("class")
-            || line.startsWith("interface")
-            || line.startsWith("enum")) {
+        if (keywords.stream().anyMatch(line::startsWith)) {
           break;
         }
       }
@@ -335,10 +338,19 @@ public class JavadocJarMaker {
     return "";
   }
 
-  private static void filterExcludedPackages(
+  private static void filterPackages(
       Path unpackTo,
       Map<String, List<JavaFileObject>> sources,
+      Set<String> expandedIncludedPackages,
       Set<String> expandedExcludedPackages) {
+    // If no "include" packages are specified, then include everything
+    // minus the excluded packages.
+    // If "include" packages are specified, then only include those packages
+    // AND subtract the excluded packages.
+    if (!expandedIncludedPackages.isEmpty()) {
+      sources.keySet().retainAll(expandedIncludedPackages);
+    }
+
     for (String excludedPackage : expandedExcludedPackages) {
       sources
           .getOrDefault(excludedPackage, new ArrayList<>())

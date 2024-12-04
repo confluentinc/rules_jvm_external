@@ -45,6 +45,7 @@ def generate_javadoc(
     transitive_inputs.append(classpath)
 
     args.add_all(excluded_packages, before_each = "--exclude-packages")
+    args.add_all(ctx.attr.included_packages, before_each = "--include-packages")
 
     for dep in doc_deps:
         dep_info = dep[_JavadocInfo]
@@ -165,6 +166,13 @@ javadoc = rule(
             doc = """A list of packages to exclude from the generated javadoc. Wildcards are supported at the end of
             the package name. For example, `com.example.*` will exclude all the subpackages of `com.example`, while
             `com.example` will exclude only the files directly in `com.example`.""",
+            allow_empty = True,
+            default = [],
+        ),
+        "included_packages": attr.string_list(
+            doc = """A list of packages to include in the generated javadoc. Wildcards are supported at the end of
+            the package name. For example, `com.example.*` will include all the subpackages of `com.example`, while
+            `com.example` will include only the files directly in `com.example`.""",
             allow_empty = True,
             default = [],
         ),
