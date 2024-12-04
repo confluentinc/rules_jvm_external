@@ -162,7 +162,9 @@ javadoc = rule(
             default = [],
         ),
         "excluded_packages": attr.string_list(
-            doc = "A list of packages to exclude from the generated javadoc",
+            doc = """A list of packages to exclude from the generated javadoc. Wildcards are supported at the end of
+            the package name. For example, `com.example.*` will exclude all the subpackages of `com.example`, while
+            `com.example` will exclude only the files directly in `com.example`.""",
             allow_empty = True,
             default = [],
         ),
