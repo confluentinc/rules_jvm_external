@@ -18,7 +18,8 @@ load("@rules_jvm_external//:defs.bzl", "maven_install", "artifact")
 <pre>
 load("@rules_jvm_external//:defs.bzl", "javadoc")
 
-javadoc(<a href="#javadoc-name">name</a>, <a href="#javadoc-deps">deps</a>, <a href="#javadoc-additional_dependencies">additional_dependencies</a>, <a href="#javadoc-doc_deps">doc_deps</a>, <a href="#javadoc-doc_url">doc_url</a>, <a href="#javadoc-excluded_workspaces">excluded_workspaces</a>, <a href="#javadoc-javadocopts">javadocopts</a>)
+javadoc(<a href="#javadoc-name">name</a>, <a href="#javadoc-deps">deps</a>, <a href="#javadoc-additional_dependencies">additional_dependencies</a>, <a href="#javadoc-doc_deps">doc_deps</a>, <a href="#javadoc-doc_resources">doc_resources</a>, <a href="#javadoc-doc_url">doc_url</a>, <a href="#javadoc-excluded_packages">excluded_packages</a>,
+        <a href="#javadoc-excluded_workspaces">excluded_workspaces</a>, <a href="#javadoc-included_packages">included_packages</a>, <a href="#javadoc-javadocopts">javadocopts</a>)
 </pre>
 
 Generate a javadoc from all the `deps`
@@ -32,8 +33,11 @@ Generate a javadoc from all the `deps`
 | <a id="javadoc-deps"></a>deps |  The java libraries to generate javadocs for.<br><br>The source jars of each dep will be used to generate the javadocs. Currently docs for transitive dependencies are not generated.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
 | <a id="javadoc-additional_dependencies"></a>additional_dependencies |  Mapping of `Label`s to the excluded workspace names. Note that this must match the values passed to the `pom_file` rule so the `pom.xml` correctly lists these dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
 | <a id="javadoc-doc_deps"></a>doc_deps |  `javadoc` targets referenced by the current target.<br><br>Use this to automatically add appropriate `-linkoffline` javadoc options to resolve references to packages documented by the given javadoc targets that have `url` specified.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="javadoc-doc_resources"></a>doc_resources |  Resources to include in the javadoc jar.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="javadoc-doc_url"></a>doc_url |  The URL at which this documentation will be hosted.<br><br>This information is only used by javadoc targets depending on this target.   | String | optional |  `""`  |
+| <a id="javadoc-excluded_packages"></a>excluded_packages |  A list of packages to exclude from the generated javadoc. Wildcards are supported at the end of the package name. For example, `com.example.*` will exclude all the subpackages of `com.example`, while `com.example` will exclude only the files directly in `com.example`.   | List of strings | optional |  `[]`  |
 | <a id="javadoc-excluded_workspaces"></a>excluded_workspaces |  A list of bazel workspace names to exclude from the generated jar   | List of strings | optional |  `["com_google_protobuf", "protobuf"]`  |
+| <a id="javadoc-included_packages"></a>included_packages |  A list of packages to include in the generated javadoc. Wildcards are supported at the end of the package name. For example, `com.example.*` will include all the subpackages of `com.example`, while `com.example` will include only the files directly in `com.example`.   | List of strings | optional |  `[]`  |
 | <a id="javadoc-javadocopts"></a>javadocopts |  javadoc options. Note sources and classpath are derived from the deps. Any additional options can be passed here. If nothing is passed, a default list of options is used: ["-notimestamp", "-use", "-quiet", "-Xdoclint:-missing", "-encoding", "UTF8"]   | List of strings | optional |  `["-notimestamp", "-use", "-quiet", "-Xdoclint:-missing", "-encoding", "UTF8"]`  |
 
 
@@ -44,8 +48,9 @@ Generate a javadoc from all the `deps`
 <pre>
 load("@rules_jvm_external//:defs.bzl", "java_export")
 
-java_export(<a href="#java_export-name">name</a>, <a href="#java_export-maven_coordinates">maven_coordinates</a>, <a href="#java_export-manifest_entries">manifest_entries</a>, <a href="#java_export-deploy_env">deploy_env</a>, <a href="#java_export-excluded_workspaces">excluded_workspaces</a>,
-            <a href="#java_export-pom_template">pom_template</a>, <a href="#java_export-visibility">visibility</a>, <a href="#java_export-tags">tags</a>, <a href="#java_export-testonly">testonly</a>, <a href="#java_export-classifier_artifacts">classifier_artifacts</a>, <a href="#java_export-kwargs">kwargs</a>)
+java_export(<a href="#java_export-name">name</a>, <a href="#java_export-maven_coordinates">maven_coordinates</a>, <a href="#java_export-manifest_entries">manifest_entries</a>, <a href="#java_export-deploy_env">deploy_env</a>, <a href="#java_export-excluded_workspaces">excluded_workspaces</a>, <a href="#java_export-exclusions">exclusions</a>,
+            <a href="#java_export-pom_template">pom_template</a>, <a href="#java_export-visibility">visibility</a>, <a href="#java_export-tags">tags</a>, <a href="#java_export-testonly">testonly</a>, <a href="#java_export-classifier_artifacts">classifier_artifacts</a>, <a href="#java_export-publish_maven_metadata">publish_maven_metadata</a>,
+            <a href="#java_export-kwargs">kwargs</a>)
 </pre>
 
 Extends `java_library` to allow maven artifacts to be uploaded.
@@ -101,11 +106,13 @@ Generated rules:
 | <a id="java_export-manifest_entries"></a>manifest_entries |  A dict of `String: String` containing additional manifest entry attributes and values.   |  `{}` |
 | <a id="java_export-deploy_env"></a>deploy_env |  A list of labels of Java targets to exclude from the generated jar. [`java_binary`](https://bazel.build/reference/be/java#java_binary) targets are *not* supported.   |  `[]` |
 | <a id="java_export-excluded_workspaces"></a>excluded_workspaces |  A dict of strings representing the workspace names of artifacts that should not be included in the maven jar to a `Label` pointing to the dependency that workspace should be replaced by, or `None` if the exclusion shouldn't be replaced with an extra dependency.   |  `{"com_google_protobuf": None, "protobuf": None}` |
+| <a id="java_export-exclusions"></a>exclusions |  Mapping of target labels to a list of exclusions to be added to the POM file. Each label must correspond to a direct maven dependency of this target. Each exclusion is represented as a `group:artifact` string.   |  `{}` |
 | <a id="java_export-pom_template"></a>pom_template |  The template to be used for the pom.xml file.   |  `None` |
 | <a id="java_export-visibility"></a>visibility |  The visibility of the target   |  `None` |
 | <a id="java_export-tags"></a>tags |  <p align="center"> - </p>   |  `[]` |
 | <a id="java_export-testonly"></a>testonly |  <p align="center"> - </p>   |  `None` |
 | <a id="java_export-classifier_artifacts"></a>classifier_artifacts |  A dict of classifier -> artifact of additional artifacts to publish to Maven.   |  `{}` |
+| <a id="java_export-publish_maven_metadata"></a>publish_maven_metadata |  Whether to publish a maven-metadata.xml and so may contain any valid parameter for that rule.   |  `True` |
 | <a id="java_export-kwargs"></a>kwargs |  <p align="center"> - </p>   |  none |
 
 
