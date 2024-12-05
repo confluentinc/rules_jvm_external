@@ -2,6 +2,8 @@ package com.github.bazelbuild.rules_jvm_external.javadoc;
 
 import static com.github.bazelbuild.rules_jvm_external.ZipUtils.createJar;
 import static com.github.bazelbuild.rules_jvm_external.ZipUtils.readJar;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
@@ -68,16 +70,16 @@ public class ExclusionTest {
 
     Map<String, String> contents = readJar(outputJar);
 
-    assert contents.containsKey("com/example/Main.html");
+    assertTrue(contents.containsKey("com/example/Main.html"));
 
-    assert contents.containsKey("com/example/processor/Processor.html");
-    assert !contents.containsKey("com/example/processor/internal/InternalProcessor.html");
+    assertTrue(contents.containsKey("com/example/processor/Processor.html"));
+    assertTrue(!contents.containsKey("com/example/processor/internal/InternalProcessor.html"));
 
-    assert contents.containsKey("com/example/state/Thing.html");
-    assert !contents.containsKey("com/example/state/internal/InternalThing.html");
+    assertTrue(contents.containsKey("com/example/state/Thing.html"));
+    assertTrue(!contents.containsKey("com/example/state/internal/InternalThing.html"));
 
-    assert contents.containsKey("com/example/query/Query.html");
-    assert !contents.containsKey("com/example/query/internal/InternalQuery.html");
+    assertTrue(contents.containsKey("com/example/query/Query.html"));
+    assertTrue(!contents.containsKey("com/example/query/internal/InternalQuery.html"));
   }
 
   @Test
@@ -109,10 +111,11 @@ public class ExclusionTest {
     Map<String, String> contents = readJar(outputJar);
 
     // With asterisk, the "other" subpackage should be excluded as well.
-    assert contents.containsKey("com/example/Main.html");
-    assert contents.containsKey("com/example/processor/Processor.html");
-    assert !contents.containsKey("com/example/processor/internal/InternalProcessor.html");
-    assert !contents.containsKey("com/example/processor/internal/other/OtherProcessor.html");
+    assertTrue(contents.containsKey("com/example/Main.html"));
+    assertTrue(contents.containsKey("com/example/processor/Processor.html"));
+
+    assertFalse(contents.containsKey("com/example/processor/internal/InternalProcessor.html"));
+    assertFalse(contents.containsKey("com/example/processor/internal/other/OtherProcessor.html"));
   }
 
   @Test
@@ -141,8 +144,8 @@ public class ExclusionTest {
 
     // Checking that the toplevel package "io" is excluded. If it wasn't, the javadoc command
     // would throw an error for -subpackage containing a package that doesn't exist.
-    assert contents.containsKey("com/example/Main.html");
-    assert !contents.containsKey("io/example/processor/Processor.html");
+    assertTrue(contents.containsKey("com/example/Main.html"));
+    assertFalse(contents.containsKey("io/example/processor/Processor.html"));
   }
 
   @Test
@@ -176,8 +179,8 @@ public class ExclusionTest {
     // The include gets applied before the exclude.
     // io.example is not explicitely excluded, but its not in the include list, so it should not
     // appear.
-    assert contents.containsKey("com/example/Main.html");
-    assert !contents.containsKey("io/example/Thing.html");
-    assert !contents.containsKey("com/example/internal/InternalThing.html");
+    assertTrue(contents.containsKey("com/example/Main.html"));
+    assertFalse(contents.containsKey("io/example/Thing.html"));
+    assertFalse(contents.containsKey("com/example/internal/InternalThing.html"));
   }
 }

@@ -191,11 +191,16 @@ public class JavadocJarMaker {
 
       options.addAll(Arrays.asList("-d", outputTo.toAbsolutePath().toString()));
 
-      // sourcepath and subpackages should work in most cases. A known edge case is when the package names
-      // don't match the directory structure. For example `Main.java` in `tests/integration/java_export` has
-      // a package of "com.jvm.external.jvm_export" but the file is in `tests/integration/java_export/Main.java`.
-      // The error comes from the javadoc tool itself. It seems that `-subpackage` looks at the directory structure,
-      // not the package name in the file. For this reason, include/exclude will not work when the package name
+      // sourcepath and subpackages should work in most cases. A known edge case is when the package
+      // names
+      // don't match the directory structure. For example `Main.java` in
+      // `tests/integration/java_export` has
+      // a package of "com.jvm.external.jvm_export" but the file is in
+      // `tests/integration/java_export/Main.java`.
+      // The error comes from the javadoc tool itself. It seems that `-subpackage` looks at the
+      // directory structure,
+      // not the package name in the file. For this reason, include/exclude will not work when the
+      // package name
       // doesn't match the directory structure.
       if (!expandedExcludedPackages.isEmpty()) {
         options.add("-sourcepath");
@@ -321,6 +326,7 @@ public class JavadocJarMaker {
         BufferedReader bufferedReader = new BufferedReader(reader)) {
       String line;
       while ((line = bufferedReader.readLine()) != null) {
+        line = line.trim();
         if (line.startsWith("package ")) {
           return line.substring("package ".length(), line.indexOf(';')).trim();
         }

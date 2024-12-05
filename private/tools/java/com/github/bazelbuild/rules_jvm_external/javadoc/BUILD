@@ -1,21 +1,8 @@
 java_library(
-    name = "create_jar_lib",
-    srcs = ["CreateJar.java"],
-    visibility = [
-        "//visibility:public",
-    ],
-    deps = [
-        "//private/tools/java/com/github/bazelbuild/rules_jvm_external",
-        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/zip",
-    ],
-)
-
-java_binary(
-    name = "javadoc",
+    name = "javadoc_lib",
     srcs = ["JavadocJarMaker.java"],
-    main_class = "com.github.bazelbuild.rules_jvm_external.javadoc.JavadocJarMaker",
     visibility = [
-        "//visibility:public",
+        "//tests/com/github/bazelbuild/rules_jvm_external/javadoc:__pkg__",
     ],
     deps = [
         ":create_jar_lib",
@@ -25,14 +12,35 @@ java_binary(
 )
 
 java_binary(
-    name = "create_jar",
-    srcs = ["CreateJar.java"],
-    main_class = "com.github.bazelbuild.rules_jvm_external.javadoc.CreateJar",
+    name = "javadoc",
+    main_class = "com.github.bazelbuild.rules_jvm_external.javadoc.JavadocJarMaker",
     visibility = [
         "//visibility:public",
+    ],
+    runtime_deps = [
+        ":javadoc_lib",
+    ],
+)
+
+java_library(
+    name = "create_jar_lib",
+    srcs = ["CreateJar.java"],
+    visibility = [
+        "//tests/com/github/bazelbuild/rules_jvm_external/javadoc:__pkg__",
     ],
     deps = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/zip",
+    ],
+)
+
+java_binary(
+    name = "create_jar",
+    main_class = "com.github.bazelbuild.rules_jvm_external.javadoc.CreateJar",
+    visibility = [
+        "//visibility:public",
+    ],
+    runtime_deps = [
+        ":create_jar_lib",
     ],
 )
