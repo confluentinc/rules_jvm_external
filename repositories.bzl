@@ -60,9 +60,9 @@ def rules_jvm_external_deps(
     maybe(
         http_archive,
         name = "bazel_features",
-        sha256 = "bdc12fcbe6076180d835c9dd5b3685d509966191760a0eb10b276025fcb76158",
-        strip_prefix = "bazel_features-1.17.0",
-        url = "https://github.com/bazel-contrib/bazel_features/releases/download/v1.17.0/bazel_features-v1.17.0.tar.gz",
+        sha256 = "9c7f9a4c997cbf0eb93572b68b0ff0bb9822004633101a16d89499e814190323",
+        strip_prefix = "bazel_features-1.22.0",
+        url = "https://github.com/bazel-contrib/bazel_features/releases/download/v1.22.0/bazel_features-v1.22.0.tar.gz",
     )
 
     maven_install(
