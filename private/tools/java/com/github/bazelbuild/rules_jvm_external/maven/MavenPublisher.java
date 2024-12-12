@@ -60,7 +60,11 @@ import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
 
 import com.google.common.io.CharStreams;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.http.HttpTransport;
@@ -429,6 +433,29 @@ public class MavenPublisher {
             return Optional.empty();
           }
           return Optional.of(com.google.common.io.Files.asCharSource(path.toFile(), StandardCharsets.UTF_8).read());
+        } catch (IOException e) {
+          throw new UncheckedIOException(e);
+        } catch (URISyntaxException e) {
+          throw new RuntimeException(e);
+        }
+      });
+    } else if (targetUrl.startsWith("s3://")) {
+      return CompletableFuture.supplyAsync(() -> {
+        try {
+          S3Client s3Client = S3Client.create();
+          URI s3Uri = new URI(targetUrl);
+          String bucketName = s3Uri.getHost();
+          String path = s3Uri.getPath().substring(1);
+
+          GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                  .bucket(bucketName)
+                  .key(path)
+                  .build();
+
+          ResponseInputStream<GetObjectResponse> s3Object = s3Client.getObject(getObjectRequest);
+          return Optional.of(CharStreams.toString(new InputStreamReader(s3Object, StandardCharsets.UTF_8)));
+        } catch (NoSuchKeyException e) {
+          return Optional.empty();
         } catch (IOException e) {
           throw new UncheckedIOException(e);
         } catch (URISyntaxException e) {
