@@ -371,8 +371,8 @@ public class MavenPublisher {
   }
 
   /**
-   * Attempts to download the file at the given targetUrl. Valid protocols are: http(s) & file at
-   * the moment.
+   * Attempts to download the file at the given targetUrl. Valid protocols are: http(s), file, and
+   * s3 at the moment.
    */
   private static CompletableFuture<Optional<String>> download(
       String targetUrl, Credentials credentials) {
@@ -394,9 +394,9 @@ public class MavenPublisher {
           try {
             URI s3Uri = new URI(targetUrl);
             String bucketName = s3Uri.getHost();
-            String path = s3Uri.getPath().substring(1);
+            String key = s3Uri.getPath().substring(1);
             GetObjectRequest request =
-                GetObjectRequest.builder().bucket(bucketName).key(path).build();
+                GetObjectRequest.builder().bucket(bucketName).key(key).build();
             ResponseInputStream<GetObjectResponse> s3Object = s3Client.getObject(request);
             return Optional.of(
                 CharStreams.toString(new InputStreamReader(s3Object, StandardCharsets.UTF_8)));
@@ -422,9 +422,7 @@ public class MavenPublisher {
             if (!Files.exists(path)) {
               return Optional.empty();
             }
-            return Optional.of(
-                com.google.common.io.Files.asCharSource(path.toFile(), StandardCharsets.UTF_8)
-                    .read());
+            return Optional.of(Files.readString(path, StandardCharsets.UTF_8));
           } catch (IOException e) {
             throw new UncheckedIOException(e);
           } catch (URISyntaxException e) {
@@ -585,10 +583,10 @@ public class MavenPublisher {
       S3Client s3Client = S3Client.create();
       URI s3Uri = new URI(targetUrl);
       String bucketName = s3Uri.getHost();
-      String path = s3Uri.getPath().substring(1);
+      String key = s3Uri.getPath().substring(1);
 
-      LOG.info(String.format("Copying %s to s3://%s/%s", toUpload, bucketName, path));
-      s3Client.putObject(PutObjectRequest.builder().bucket(bucketName).key(path).build(), toUpload);
+      LOG.info(String.format("Copying %s to s3://%s/%s", toUpload, bucketName, key));
+      s3Client.putObject(PutObjectRequest.builder().bucket(bucketName).key(key).build(), toUpload);
 
       return null;
     };
