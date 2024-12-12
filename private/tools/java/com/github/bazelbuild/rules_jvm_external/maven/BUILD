@@ -12,6 +12,10 @@ java_binary(
     deps = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external",
         artifact(
+            "software.amazon.awssdk:sdk-core",
+            repository_name = "rules_jvm_external_deps",
+        ),
+        artifact(
             "com.google.auth:google-auth-library-oauth2-http",
             repository_name = "rules_jvm_external_deps",
         ),
@@ -81,5 +85,5 @@ java_test(
             "junit:junit",
             repository_name = "regression_testing_coursier",
         ),
-    ]
+    ],
 )
