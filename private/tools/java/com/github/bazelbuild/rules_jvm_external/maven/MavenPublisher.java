@@ -396,7 +396,6 @@ public class MavenPublisher {
   private static CompletableFuture<Optional<String>> download(
           String targetUrl, Credentials credentials
   ) {
-    LOG.info(targetUrl + " is the target URL");
     if (targetUrl.startsWith("http")) {
       return CompletableFuture.supplyAsync( () -> {
           try {
