@@ -83,9 +83,13 @@ def generate_pom(
         parent = None,
         versioned_dep_coordinates = [],
         unversioned_dep_coordinates = [],
-        runtime_deps = [],
+        versioned_compile_dep_coordinates = [],
         indent = 8,
         exclusions = {}):
+    versioned_compile_dep_coordinates_set = {
+        k: None
+        for k in versioned_compile_dep_coordinates
+    }
     unpacked_coordinates = _unpack_coordinates(coordinates)
     substitutions = {
         "{groupId}": unpacked_coordinates.group,
@@ -119,7 +123,7 @@ def generate_pom(
         include_version = dep in versioned_dep_coordinates
         unpacked = _unpack_coordinates(dep)
 
-        new_scope = "runtime" if dep in runtime_deps else "compile"
+        new_scope = "compile" if dep in versioned_compile_dep_coordinates_set else "runtime"
         if unpacked.packaging == "pom":
             new_scope = "import"
         deps.append(format_dep(unpacked, scope = new_scope, indent = indent, exclusions = exclusions.get(dep, {}), include_version = include_version))
