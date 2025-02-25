@@ -38,8 +38,10 @@ _BUILD = """
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@rules_license//rules:package_info.bzl", "package_info")
+load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_plugin")
 load("@rules_jvm_external//private/rules:pin_dependencies.bzl", "pin_dependencies")
 load("@rules_jvm_external//private/rules:jvm_import.bzl", "jvm_import")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 {aar_import_statement}
 
 {imports}
@@ -117,6 +119,7 @@ _BUILD_PIN_ALIAS = """
 alias(
   name = "pin",
   actual = "{unpinned_pin_target}",
+  visibility = ["//visibility:public"],
 )
 """
 
@@ -794,6 +797,7 @@ def get_coursier_cache_or_default(repository_ctx, use_unsafe_shared_cache):
 def make_coursier_dep_tree(
         repository_ctx,
         artifacts,
+        boms,
         excluded_artifacts,
         repositories,
         version_conflict_policy,
@@ -837,11 +841,15 @@ def make_coursier_dep_tree(
     cmd.extend(artifact_coordinates)
     if version_conflict_policy == "pinned":
         for coord in artifact_coordinates:
-            # Undo any `,classifier=` and/or `,type=` suffix from `utils.artifact_coordinate`.
-            cmd.extend([
-                "--force-version",
-                ",".join([c for c in coord.split(",") if not c.startswith("classifier=") and not c.startswith("type=")]),
-            ])
+            # check if the artifact has version set
+            version = coord.split(",")[0].split(":")[2]
+
+            if version:
+                # Undo any `,classifier=` and/or `,type=` suffix from `utils.artifact_coordinate`.
+                cmd.extend([
+                    "--force-version",
+                    ",".join([c for c in coord.split(",") if not c.startswith("classifier=") and not c.startswith("type=")]),
+                ])
     else:
         for coord in forced_versions:
             cmd.extend([
@@ -852,6 +860,9 @@ def make_coursier_dep_tree(
     cmd.append("--verbose" if _is_verbose(repository_ctx) else "--quiet")
     cmd.append("--no-default")
     cmd.extend(["--json-output-file", "dep-tree.json"])
+
+    for bom in boms:
+        cmd.extend(["--bom", utils.artifact_coordinate(bom)])
 
     if fail_on_missing_checksum:
         cmd.extend(["--checksum", "SHA-1,MD5"])
@@ -954,6 +965,13 @@ def rewrite_files_attribute_if_necessary(repository_ctx, dep_tree):
         # `pinned_maven_install`. Oh well, let's just do this the manual way.
         if dep["file"].endswith(".pom"):
             jar_path = dep["file"].removesuffix(".pom") + ".jar"
+
+            # The same artifact can being depended on via pom and jar at different
+            # places in the tree. In such case, we deduplicate it so that 2
+            # entries do not reference the same file, which will otherwise lead
+            # in symlink error because of existing file down the road.
+            if is_dep(jar_path, amended_deps):
+                continue
             if repository_ctx.path(jar_path).exists:
                 dep["file"] = jar_path
 
@@ -962,6 +980,12 @@ def rewrite_files_attribute_if_necessary(repository_ctx, dep_tree):
     dep_tree["dependencies"] = amended_deps
 
     return dep_tree
+
+def is_dep(jar_path, deps):
+    for dep in deps:
+        if jar_path == dep.get("file", None):
+            return True
+    return False
 
 def remove_prefix(s, prefix):
     if s.startswith(prefix):
@@ -1011,6 +1035,9 @@ def _coursier_fetch_impl(repository_ctx):
 
     _check_artifacts_are_unique(artifacts, repository_ctx.attr.duplicate_version_warning)
 
+    boms = [json.decode(bom) for bom in repository_ctx.attr.boms]
+    _check_artifacts_are_unique(boms, repository_ctx.attr.duplicate_version_warning)
+
     excluded_artifacts = []
     for artifact in repository_ctx.attr.excluded_artifacts:
         excluded_artifacts.append(json.decode(artifact))
@@ -1024,6 +1051,7 @@ def _coursier_fetch_impl(repository_ctx):
     dep_tree = make_coursier_dep_tree(
         repository_ctx,
         artifacts,
+        boms,
         excluded_artifacts,
         repositories,
         repository_ctx.attr.version_conflict_policy,
@@ -1410,7 +1438,8 @@ pinned_coursier_fetch = repository_rule(
             doc = "Instructions to re-pin the repository if required. Many people have wrapper scripts for keeping dependencies up to date, and would like to point users to that instead of the default.",
         ),
         "excluded_artifacts": attr.string_list(default = []),  # only used for hash generation
-        "_workspace_label": attr.label(default = "@//does/not:exist"),
+        # Use @@// to refer to the main repo with Bzlmod.
+        "_workspace_label": attr.label(default = ("@@" if str(Label("//:invalid")).startswith("@@") else "@") + "//does/not:exist"),
     },
     implementation = _pinned_coursier_fetch_impl,
 )
@@ -1426,6 +1455,7 @@ coursier_fetch = repository_rule(
         "user_provided_name": attr.string(),
         "repositories": attr.string_list(),  # list of repository objects, each as json
         "artifacts": attr.string_list(),  # list of artifact objects, each as json
+        "boms": attr.string_list(),  # list of bom objects, each as json
         "fail_on_missing_checksum": attr.bool(default = True),
         "fetch_sources": attr.bool(default = False),
         "fetch_javadoc": attr.bool(default = False),

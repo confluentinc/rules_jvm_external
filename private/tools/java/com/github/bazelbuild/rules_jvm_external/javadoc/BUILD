@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 java_library(
     name = "javadoc_lib",
     srcs = ["JavadocJarMaker.java"],
@@ -10,6 +11,9 @@ java_library(
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/zip",
     ],
 )
+=======
+load("@rules_java//java:defs.bzl", "java_binary")
+>>>>>>> upstream/master
 
 java_binary(
     name = "javadoc",

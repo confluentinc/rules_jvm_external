@@ -124,7 +124,7 @@ Generated rules:
 load("@rules_jvm_external//:defs.bzl", "maven_bom")
 
 maven_bom(<a href="#maven_bom-name">name</a>, <a href="#maven_bom-maven_coordinates">maven_coordinates</a>, <a href="#maven_bom-java_exports">java_exports</a>, <a href="#maven_bom-bom_pom_template">bom_pom_template</a>, <a href="#maven_bom-dependencies_maven_coordinates">dependencies_maven_coordinates</a>,
-          <a href="#maven_bom-dependencies_pom_template">dependencies_pom_template</a>, <a href="#maven_bom-tags">tags</a>, <a href="#maven_bom-testonly">testonly</a>, <a href="#maven_bom-visibility">visibility</a>)
+          <a href="#maven_bom-dependencies_pom_template">dependencies_pom_template</a>, <a href="#maven_bom-tags">tags</a>, <a href="#maven_bom-testonly">testonly</a>, <a href="#maven_bom-visibility">visibility</a>, <a href="#maven_bom-toolchains">toolchains</a>)
 </pre>
 
 Generates a Maven BOM `pom.xml` file and an optional "dependencies" `pom.xml`.
@@ -180,6 +180,7 @@ Generated rules:
 | <a id="maven_bom-tags"></a>tags |  <p align="center"> - </p>   |  `None` |
 | <a id="maven_bom-testonly"></a>testonly |  <p align="center"> - </p>   |  `None` |
 | <a id="maven_bom-visibility"></a>visibility |  <p align="center"> - </p>   |  `None` |
+| <a id="maven_bom-toolchains"></a>toolchains |  <p align="center"> - </p>   |  `[]` |
 
 
 <a id="maven_install"></a>

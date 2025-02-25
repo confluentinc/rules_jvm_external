@@ -26,6 +26,7 @@ def _label(label_or_string):
 
 def _maven_bom_impl(ctx):
     fragments = [f[MavenBomFragmentInfo] for f in ctx.attr.fragments]
+    dep_coordinates = [f.coordinates for f in fragments]
 
     # Expand maven coordinates for any variables to be replaced.
     coordinates = ctx.expand_make_variables("coordinates", ctx.attr.maven_coordinates, {})
@@ -33,7 +34,8 @@ def _maven_bom_impl(ctx):
     bom = generate_pom(
         ctx,
         coordinates = coordinates,
-        versioned_dep_coordinates = [f[MavenBomFragmentInfo].coordinates for f in ctx.attr.fragments],
+        versioned_dep_coordinates = dep_coordinates,
+        versioned_compile_dep_coordinates = dep_coordinates,
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
     )
@@ -70,13 +72,15 @@ def _maven_dependencies_bom_impl(ctx):
     first_order_deps = [f[MavenBomFragmentInfo].coordinates for f in ctx.attr.fragments]
     all_deps = depset(transitive = [f.maven_info.maven_deps for f in fragments]).to_list()
     combined_deps = [a for a in all_deps if a not in first_order_deps]
+    compile_deps = depset(transitive = [f.maven_info.maven_compile_deps for f in fragments]).to_list()
 
     unpacked = unpack_coordinates(ctx.attr.bom_coordinates)
 
     dependencies_bom = generate_pom(
         ctx,
         coordinates = ctx.attr.maven_coordinates,
-        versioned_dep_coordinates = combined_deps + ["%s:%s:pom:import:%s" % (unpacked.groupId, unpacked.artifactId, unpacked.version)],
+        versioned_dep_coordinates = combined_deps + ["%s:%s:pom:%s" % (unpacked.group, unpacked.artifact, unpacked.version)],
+        versioned_compile_dep_coordinates = compile_deps,
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
         indent = 12,
@@ -119,7 +123,8 @@ def maven_bom(
         dependencies_pom_template = None,
         tags = None,
         testonly = None,
-        visibility = None):
+        visibility = None,
+        toolchains = []):
     """Generates a Maven BOM `pom.xml` file and an optional "dependencies" `pom.xml`.
 
     The generated BOM will contain a list of all the coordinates of the
@@ -187,6 +192,7 @@ def maven_bom(
         tags = tags,
         testonly = testonly,
         visibility = visibility,
+        toolchains = toolchains,
     )
 
     maven_publish(
@@ -196,6 +202,7 @@ def maven_bom(
         tags = tags,
         testonly = testonly,
         visibility = visibility,
+        toolchains = toolchains,
     )
 
     if dependencies_maven_coordinates:
@@ -208,6 +215,7 @@ def maven_bom(
             tags = tags,
             testonly = testonly,
             visibility = visibility,
+            toolchains = toolchains,
         )
 
         maven_publish(
@@ -217,4 +225,5 @@ def maven_bom(
             tags = tags,
             testonly = testonly,
             visibility = visibility,
+            toolchains = toolchains,
         )

@@ -1,3 +1,4 @@
+load("@rules_java//java:defs.bzl", "java_library")
 load("//:specs.bzl", "parse", _json = "json")
 load(":javadoc.bzl", "javadoc")
 load(":maven_bom_fragment.bzl", "maven_bom_fragment")
@@ -98,8 +99,14 @@ def java_export(
     doc_included_packages = kwargs.pop("doc_included_packages", [])
     toolchains = kwargs.pop("toolchains", [])
 
+    # java_library doesn't allow srcs without deps, but users may try to specify deps rather than
+    # runtime_deps on java_export to indicate that the generated POM should list the deps as compile
+    # deps.
+    if kwargs.get("deps") and not kwargs.get("srcs"):
+        fail("deps not allowed without srcs; move to runtime_deps (for 'runtime' scope in the generated POM) or exports (for 'compile' scope)")
+
     # Construct the java_library we'll export from here.
-    native.java_library(
+    java_library(
         name = lib_name,
         visibility = visibility,
         tags = tags + maven_coordinates_tags,
