@@ -47,12 +47,6 @@ def format_dep(unpacked, scope = None, indent = 8, include_version = True, exclu
             "    <scope>%s</scope>\n" % scope,
         ])
 
-    if unpacked.classifier:
-        dependency.extend([
-            whitespace,
-            "    <classifier>%s</classifier>\n" % unpacked.classifier,
-        ])
-
     if exclusions:
         dependency.extend([
             whitespace,
