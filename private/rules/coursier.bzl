@@ -41,6 +41,7 @@ load("@rules_license//rules:package_info.bzl", "package_info")
 load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_plugin")
 load("@rules_jvm_external//private/rules:pin_dependencies.bzl", "pin_dependencies")
 load("@rules_jvm_external//private/rules:jvm_import.bzl", "jvm_import")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 {aar_import_statement}
 
 {imports}
@@ -955,6 +956,13 @@ def rewrite_files_attribute_if_necessary(repository_ctx, dep_tree):
         # `pinned_maven_install`. Oh well, let's just do this the manual way.
         if dep["file"].endswith(".pom"):
             jar_path = dep["file"].removesuffix(".pom") + ".jar"
+
+            # The same artifact can being depended on via pom and jar at different
+            # places in the tree. In such case, we deduplicate it so that 2
+            # entries do not reference the same file, which will otherwise lead
+            # in symlink error because of existing file down the road.
+            if is_dep(jar_path, amended_deps):
+                continue
             if repository_ctx.path(jar_path).exists:
                 dep["file"] = jar_path
 
@@ -963,6 +971,12 @@ def rewrite_files_attribute_if_necessary(repository_ctx, dep_tree):
     dep_tree["dependencies"] = amended_deps
 
     return dep_tree
+
+def is_dep(jar_path, deps):
+    for dep in deps:
+        if jar_path == dep.get("file", None):
+            return True
+    return False
 
 def remove_prefix(s, prefix):
     if s.startswith(prefix):
