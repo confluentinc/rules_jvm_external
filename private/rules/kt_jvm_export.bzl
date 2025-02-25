@@ -70,8 +70,11 @@ def kt_jvm_export(
 
     javadocopts = kwargs.pop("javadocopts", None)
 
-    updated_excluded_workspaces = {name: None for name in excluded_workspaces}
-    updated_excluded_workspaces.update({KOTLIN_STDLIB: None})
+    # ensure that the kotlin-stdlib is included in deploy_env
+    if KOTLIN_STDLIB not in deploy_env:
+        updated_deploy_env = deploy_env + [KOTLIN_STDLIB]
+    else:
+        updated_deploy_env = deploy_env
 
     # Construct the kt_jvm_library we'll export from here.
     kt_jvm_library(
@@ -85,8 +88,8 @@ def kt_jvm_export(
         name = name,
         maven_coordinates = maven_coordinates,
         lib_name = lib_name,
-        deploy_env = deploy_env,
-        excluded_workspaces = updated_excluded_workspaces,
+        deploy_env = updated_deploy_env,
+        excluded_workspaces = excluded_workspaces,
         pom_template = pom_template,
         visibility = visibility,
         tags = tags,
