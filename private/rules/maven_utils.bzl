@@ -99,7 +99,6 @@ def generate_pom(
         "{version}": unpacked_coordinates.version,
         "{type}": unpacked_coordinates.packaging or "jar",
         "{classifier}": unpacked_coordinates.classifier or "jar",
-        "{scope}": unpacked_coordinates.scope or "compile",
     }
 
     for key in exclusions:
