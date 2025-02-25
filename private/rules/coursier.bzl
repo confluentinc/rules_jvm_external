@@ -38,6 +38,7 @@ _BUILD = """
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@rules_license//rules:package_info.bzl", "package_info")
+load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_plugin")
 load("@rules_jvm_external//private/rules:pin_dependencies.bzl", "pin_dependencies")
 load("@rules_jvm_external//private/rules:jvm_import.bzl", "jvm_import")
 {aar_import_statement}
@@ -1410,7 +1411,8 @@ pinned_coursier_fetch = repository_rule(
             doc = "Instructions to re-pin the repository if required. Many people have wrapper scripts for keeping dependencies up to date, and would like to point users to that instead of the default.",
         ),
         "excluded_artifacts": attr.string_list(default = []),  # only used for hash generation
-        "_workspace_label": attr.label(default = "@//does/not:exist"),
+        # Use @@// to refer to the main repo with Bzlmod.
+        "_workspace_label": attr.label(default = ("@@" if str(Label("//:invalid")).startswith("@@") else "@") + "//does/not:exist"),
     },
     implementation = _pinned_coursier_fetch_impl,
 )

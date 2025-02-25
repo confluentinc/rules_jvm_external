@@ -1,3 +1,5 @@
+load("@rules_java//java:defs.bzl", "java_binary")
+
 java_library(
     name = "javadoc_lib",
     srcs = ["JavadocJarMaker.java"],
