@@ -45,6 +45,10 @@ def _pom_file_impl(ctx):
         ctx.expand_make_variables("maven_compile_deps", coords, ctx.var)
         for coords in compile_maven_deps
     ]
+    expanded_export_deps = [
+        ctx.expand_make_variables("maven_export_deps", coords, ctx.var)
+        for coords in export_maven_deps
+    ]
 
     # Expand maven coordinates for any variables to be replaced.
     coordinates = ctx.expand_make_variables("coordinates", info.coordinates, ctx.var)
@@ -54,7 +58,7 @@ def _pom_file_impl(ctx):
         coordinates = coordinates,
         versioned_dep_coordinates = sorted(expanded_maven_deps),
         versioned_compile_dep_coordinates = expanded_compile_deps,
-        versioned_export_dep_coordinates = export_maven_deps,
+        versioned_export_dep_coordinates = expanded_export_deps,
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
         exclusions = exclusions,
