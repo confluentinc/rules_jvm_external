@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
-load("//:defs.bzl", "artifact", "java_export", "maven_bom")
+load("//:defs.bzl", "artifact", "java_export")
 
 java_export(
     name = "pom-example",
@@ -52,4 +52,36 @@ diff_test(
     name = "validate-pom-example-with-classifier-dep",
     file1 = ":pom-example-with-classifier-dep-pom",
     file2 = "pom-with-classifier-dep.golden.xml",
+)
+
+java_export(
+    name = "pom-example-with-compile-only-dep",
+    srcs = ["PomExample.java"],
+    maven_coordinates = "com.example:app:1.0.0",
+    # This dep can be any neverlink dep.
+    deps = ["@regression_testing_coursier//:com_squareup_javapoet"],
+)
+
+diff_test(
+    name = "validate-pom-example-with-compile-only-dep",
+    file1 = ":pom-example-with-compile-only-dep-pom",
+    file2 = "pom-with-compile-only-dep.golden.xml",
+)
+
+java_export(
+    name = "pom-example-with-exported-dep",
+    srcs = ["PomExample.java"],
+    maven_coordinates = "com.example:app:1.0.0",
+    exports = [
+        "//tests/integration/maven_bom:one-dep",
+    ],
+    deps = [
+        "//tests/integration/maven_bom:one-dep",
+    ],
+)
+
+diff_test(
+    name = "validate-pom-example-with-exported-dep",
+    file1 = ":pom-example-with-exported-dep-pom",
+    file2 = "pom-with-exported-dep.golden.xml",
 )

@@ -12,13 +12,6 @@
             <groupId>com.example</groupId>
             <artifactId>one-dep</artifactId>
             <version>1.0.0</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
-            <version>31.1-jre</version>
-            <scope>runtime</scope>
         </dependency>
     </dependencies>
 </project>
