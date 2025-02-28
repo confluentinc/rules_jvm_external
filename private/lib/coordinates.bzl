@@ -29,8 +29,6 @@ def unpack_coordinates(coords):
         return None
 
     pieces = coords.split(":")
-    if len(pieces) < 2:
-        fail("Could not parse maven coordinate: %s" % coords)
     group = pieces[0]
     artifact = pieces[1]
 
