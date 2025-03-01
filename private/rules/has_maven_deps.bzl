@@ -5,7 +5,7 @@ MavenInfo = provider(
         # Fields to do with maven coordinates
         "coordinates": "Maven coordinates for the project, which may be None",
         "maven_deps": "Depset of first-order maven dependencies",
-        "maven_runtime_deps": "Depset of first-order maven runtime dependencies",
+        "maven_export_deps": "Depset of first-order maven dependency exports",
         "as_maven_dep": "Depset of this project if used as a maven dependency",
 
         # Fields used for generating artifacts
@@ -30,6 +30,7 @@ _EMPTY_INFO = MavenInfo(
     coordinates = None,
     maven_deps = depset(),
     as_maven_dep = depset(),
+    maven_export_deps = depset(),
     artifact_infos = depset(),
     dep_infos = depset(),
     label_to_javainfo = {},
@@ -40,6 +41,7 @@ _STOPPED_INFO = MavenInfo(
     coordinates = "STOPPED",
     maven_deps = depset(),
     as_maven_dep = depset(),
+    maven_export_deps = depset(),
     artifact_infos = depset(),
     dep_infos = depset(),
     label_to_javainfo = {},
@@ -103,13 +105,18 @@ def calculate_artifact_source_jars(maven_info):
     all_jars = _flatten([i.transitive_source_jars for i in maven_info.artifact_infos.to_list()])
     dep_jars = _flatten([i.transitive_source_jars for i in maven_info.dep_infos.to_list()])
 
-    return _set_diff(all_jars, dep_jars)
+    diff = _set_diff(all_jars, dep_jars)
+
+    #    print("all_jars: %s" % all_jars)
+    #    print("dep_jars: %s" % dep_jars)
+    #    print("diff: %s" % diff)
+    return diff
 
 # Used to gather maven data
 _gathered = provider(
     fields = [
         "all_infos",
-        "runtime_infos",
+        "export_deps",
         "label_to_javainfo",
         "artifact_infos",
         "transitive_exports",
@@ -117,23 +124,29 @@ _gathered = provider(
     ],
 )
 
-def _extract_from(gathered, maven_info, dep, include_transitive_exports, is_runtime_dep):
+# NOTE:
+# THIS WORKS SOMEWHAT.
+# IT SEEMS LIKE THE ORIGINAL MAVEN_INFO == STOPPED CHECK WAS NOT WORKING HOW I EXPECTED
+# BUT WORKED REGARDLESS. IT WAS ADDING STOPPED ARTIFACTS TO BOTH LISTS SOMEHOW
+def _extract_from(gathered, maven_info, dep, is_export_dep):
     java_info = dep[JavaInfo] if dep and JavaInfo in dep else None
 
     gathered.all_infos.append(maven_info)
 
-    if is_runtime_dep:
-        gathered.runtime_infos.append(maven_info)
-
     gathered.label_to_javainfo.update(maven_info.label_to_javainfo)
     if java_info:
-        if maven_info.coordinates == "STOPPED":
-            pass
+        #        if maven_info.coordinates == "STOPPED":
+        #            pass
         if maven_info.coordinates:
             gathered.dep_infos.append(dep[JavaInfo])
+
+            if is_export_dep and maven_info.coordinates != _STOPPED_INFO.coordinates:
+                gathered.export_deps.append(maven_info)
+
         else:
             gathered.artifact_infos.append(dep[JavaInfo])
-            if include_transitive_exports:
+            if is_export_dep:
+                # TODO: How is transitive_exports used? Is the extra export_deps needed if we have this?
                 gathered.transitive_exports.append(maven_info.transitive_exports)
 
 def _has_maven_deps_impl(target, ctx):
@@ -156,7 +169,7 @@ def _has_maven_deps_impl(target, ctx):
 
     gathered = _gathered(
         all_infos = [],
-        runtime_infos = [],
+        export_deps = [],
         artifact_infos = [target[JavaInfo]],
         transitive_exports = [],
         dep_infos = [],
@@ -167,13 +180,13 @@ def _has_maven_deps_impl(target, ctx):
         for dep in getattr(ctx.rule.attr, attr, []):
             if MavenHintInfo in dep:
                 for info in dep[MavenHintInfo].maven_infos.to_list():
-                    _extract_from(gathered, info, None, attr == "exports", attr == "runtime_deps")
+                    _extract_from(gathered, info, None, attr == "exports")
 
             if not MavenInfo in dep:
                 continue
 
             info = dep[MavenInfo]
-            _extract_from(gathered, info, dep, attr == "exports", attr == "runtime_deps")
+            _extract_from(gathered, info, dep, attr == "exports")
 
     all_infos = gathered.all_infos
     artifact_infos = gathered.artifact_infos
@@ -181,7 +194,7 @@ def _has_maven_deps_impl(target, ctx):
     dep_infos = gathered.dep_infos
     label_to_javainfo = gathered.label_to_javainfo
     maven_deps = depset(transitive = [i.as_maven_dep for i in all_infos])
-    maven_runtime_deps = depset(transitive = [i.as_maven_dep for i in gathered.runtime_infos])
+    maven_export_deps = depset(transitive = [i.as_maven_dep for i in gathered.export_deps])
 
     transitive_exports_from_exports = depset()
     if hasattr(ctx.rule.attr, "exports"):
@@ -194,7 +207,7 @@ def _has_maven_deps_impl(target, ctx):
     info = MavenInfo(
         coordinates = coordinates,
         maven_deps = maven_deps,
-        maven_runtime_deps = maven_runtime_deps,
+        maven_export_deps = maven_export_deps,
         as_maven_dep = depset([coordinates]) if coordinates else maven_deps,
         artifact_infos = depset(direct = artifact_infos),
         dep_infos = depset(direct = dep_infos, transitive = [i.dep_infos for i in all_infos]),

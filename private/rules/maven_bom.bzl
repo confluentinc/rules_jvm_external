@@ -33,6 +33,7 @@ def _maven_bom_impl(ctx):
     bom = generate_pom(
         ctx,
         coordinates = coordinates,
+        is_bom = True,
         versioned_dep_coordinates = [f[MavenBomFragmentInfo].coordinates for f in ctx.attr.fragments],
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
@@ -76,6 +77,7 @@ def _maven_dependencies_bom_impl(ctx):
     dependencies_bom = generate_pom(
         ctx,
         coordinates = ctx.attr.maven_coordinates,
+        is_bom = True,
         versioned_dep_coordinates = combined_deps + ["%s:%s:pom:%s" % (unpacked.group, unpacked.artifact, unpacked.version)],
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
