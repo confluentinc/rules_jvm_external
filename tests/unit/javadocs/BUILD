@@ -7,7 +7,7 @@ load("//:defs.bzl", "java_export")
 java_export(
     name = "app",
     srcs = ["EntryPoint.java"],
-    maven_coordinates = "com.example.vinnybod:app:0.0.1",
+    maven_coordinates = "com.example:app:0.0.1",
     deps = [
         ":compile_only_lib",
     ],
@@ -19,7 +19,7 @@ java_library(
     neverlink = True,
     tags = [
         "maven:compile-only",
-        "maven_coordinates=com.example.vinnybod:compile-lib:0.0.1",
+        "maven_coordinates=com.example:compile-lib:0.0.1",
     ],
     visibility = ["//visibility:public"],
     deps = [
