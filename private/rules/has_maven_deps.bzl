@@ -107,9 +107,6 @@ def calculate_artifact_source_jars(maven_info):
 
     diff = _set_diff(all_jars, dep_jars)
 
-    #    print("all_jars: %s" % all_jars)
-    #    print("dep_jars: %s" % dep_jars)
-    #    print("diff: %s" % diff)
     return diff
 
 # Used to gather maven data
@@ -130,7 +127,7 @@ def _extract_from(gathered, maven_info, dep, is_export_dep):
     gathered.all_infos.append(maven_info)
     gathered.label_to_javainfo.update(maven_info.label_to_javainfo)
 
-    if is_export_dep:  # and maven_info.coordinates != _STOPPED_INFO.coordinates:
+    if is_export_dep:
         gathered.export_deps.append(maven_info)
 
     if not java_info:
@@ -152,10 +149,9 @@ def _has_maven_deps_impl(target, ctx):
     # the dependency info to the pom.xml and excluding its contents from the project-jar.
     # If _EMPTY_INFO is used, _extract_from will add the dep to the artifact_infos list, which
     # will include the contents in the project-jar.
-    # If _STOPPED_INFO is used, _extract_from will not add the dep to either list. This is useful
+    # If _STOPPED_INFO is used, _extract_from will add the dep to the dep_infos list. This is useful
     # when we want to stop the propagation of the dependency info to the pom.xml while also excluding
     # the jar from the artifact.
-    # TODO: Stopped doesn't seem to actually be needed?
     for tag in ctx.rule.attr.tags:
         if tag in _STOP_TAGS:
             return [_STOPPED_INFO]
