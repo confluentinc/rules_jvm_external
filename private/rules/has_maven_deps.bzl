@@ -130,7 +130,7 @@ def _extract_from(gathered, maven_info, dep, is_export_dep):
     gathered.all_infos.append(maven_info)
     gathered.label_to_javainfo.update(maven_info.label_to_javainfo)
 
-    if is_export_dep and maven_info.coordinates != _STOPPED_INFO.coordinates:
+    if is_export_dep:  # and maven_info.coordinates != _STOPPED_INFO.coordinates:
         gathered.export_deps.append(maven_info)
 
     if not java_info:
@@ -149,9 +149,9 @@ def _has_maven_deps_impl(target, ctx):
 
     # Check the stop tags first to let us exit quickly.
     # When MavenInfo is set, _extract_from will add the dep to the dep_infos list, propagating
-    # the dependency info to the pom.xml and excluding its jar from the artifact.
+    # the dependency info to the pom.xml and excluding its contents from the project-jar.
     # If _EMPTY_INFO is used, _extract_from will add the dep to the artifact_infos list, which
-    # will include the jar in the artifact itself.
+    # will include the contents in the project-jar.
     # If _STOPPED_INFO is used, _extract_from will not add the dep to either list. This is useful
     # when we want to stop the propagation of the dependency info to the pom.xml while also excluding
     # the jar from the artifact.

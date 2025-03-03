@@ -49,7 +49,7 @@ def _pom_file_impl(ctx):
         ctx,
         coordinates = coordinates,
         versioned_dep_coordinates = sorted(expanded_maven_deps),
-        versioned_export_dep_coordinates = export_maven_deps,
+        versioned_export_dep_coordinates = expanded_export_deps,
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
         exclusions = exclusions,
