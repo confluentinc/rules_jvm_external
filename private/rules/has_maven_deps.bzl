@@ -124,30 +124,24 @@ _gathered = provider(
     ],
 )
 
-# NOTE:
-# THIS WORKS SOMEWHAT.
-# IT SEEMS LIKE THE ORIGINAL MAVEN_INFO == STOPPED CHECK WAS NOT WORKING HOW I EXPECTED
-# BUT WORKED REGARDLESS. IT WAS ADDING STOPPED ARTIFACTS TO BOTH LISTS SOMEHOW
 def _extract_from(gathered, maven_info, dep, is_export_dep):
     java_info = dep[JavaInfo] if dep and JavaInfo in dep else None
 
     gathered.all_infos.append(maven_info)
-
     gathered.label_to_javainfo.update(maven_info.label_to_javainfo)
-    if java_info:
-        #        if maven_info.coordinates == "STOPPED":
-        #            pass
-        if maven_info.coordinates:
-            gathered.dep_infos.append(dep[JavaInfo])
 
-            if is_export_dep and maven_info.coordinates != _STOPPED_INFO.coordinates:
-                gathered.export_deps.append(maven_info)
+    if is_export_dep and maven_info.coordinates != _STOPPED_INFO.coordinates:
+        gathered.export_deps.append(maven_info)
 
-        else:
-            gathered.artifact_infos.append(dep[JavaInfo])
-            if is_export_dep:
-                # TODO: How is transitive_exports used? Is the extra export_deps needed if we have this?
-                gathered.transitive_exports.append(maven_info.transitive_exports)
+    if not java_info:
+        return
+
+    if maven_info.coordinates:
+        gathered.dep_infos.append(dep[JavaInfo])
+    else:
+        gathered.artifact_infos.append(dep[JavaInfo])
+        if is_export_dep:
+            gathered.transitive_exports.append(maven_info.transitive_exports)
 
 def _has_maven_deps_impl(target, ctx):
     if not JavaInfo in target:
@@ -161,6 +155,7 @@ def _has_maven_deps_impl(target, ctx):
     # If _STOPPED_INFO is used, _extract_from will not add the dep to either list. This is useful
     # when we want to stop the propagation of the dependency info to the pom.xml while also excluding
     # the jar from the artifact.
+    # TODO: Stopped doesn't seem to actually be needed?
     for tag in ctx.rule.attr.tags:
         if tag in _STOP_TAGS:
             return [_STOPPED_INFO]
