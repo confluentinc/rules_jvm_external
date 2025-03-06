@@ -12,6 +12,7 @@
             <groupId>com.example</groupId>
             <artifactId>one-dep</artifactId>
             <version>1.0.0</version>
+            <scope>runtime</scope>
         </dependency>
     </dependencies>
 </project>
