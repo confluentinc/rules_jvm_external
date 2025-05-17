@@ -293,8 +293,8 @@ maven_install(
         ),
         # https://github.com/bazelbuild/rules_jvm_external/issues/907
         # Any two platforms to ensure that it doesn't work _only_ under the host operating system
-        "com.google.protobuf:protoc:exe:linux-x86_64:3.21.12",
-        "com.google.protobuf:protoc:exe:osx-aarch_64:3.21.12",
+        "com.google.protobuf:protoc:4.31.0:linux-x86_64:3.21.12",
+        "com.google.protobuf:protoc:4.31.0:osx-aarch_64:3.21.12",
         # https://github.com/bazelbuild/rules_jvm_external/issues/917
         # androidx core-testing POM has "exclusion" for "byte-buddy" but it should be downloaded as mockito-core
         # dependency when the usually omitted "jar" packaging type is specified.
