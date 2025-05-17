@@ -248,7 +248,7 @@ maven_install(
         "com.github.fommil.netlib:all:1.1.2",
         "nz.ac.waikato.cms.weka:weka-stable:3.8.1",
         # https://github.com/bazelbuild/rules_jvm_external/issues/111
-        "com.android.support:appcompat-v7:aar:28.0.0",
+        "com.android.support:appcompat-v7:28.0.0:28.0.0",
         "com.google.android.gms:play-services-base:16.1.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/119#issuecomment-484278260
         "org.apache.flink:flink-test-utils_2.12:1.8.0",
