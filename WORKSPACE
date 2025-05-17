@@ -268,7 +268,7 @@ maven_install(
         "org.apache.kafka:kafka_2.11:2.1.1",
         "io.confluent:kafka-avro-serializer:5.0.1",
         # https://github.com/bazelbuild/rules_jvm_external/issues/309
-        "io.quarkus.http:quarkus-http-servlet:3.0.0.Beta1",
+        "io.quarkus.http:quarkus-http-servlet:5.3.4",
         # https://github.com/bazelbuild/rules_jvm_external/issues/371
         "com.fasterxml.jackson:jackson-bom:2.9.10",
         "org.junit:junit-bom:5.3.1",
