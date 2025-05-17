@@ -299,7 +299,7 @@ maven_install(
         # androidx core-testing POM has "exclusion" for "byte-buddy" but it should be downloaded as mockito-core
         # dependency when the usually omitted "jar" packaging type is specified.
         "org.mockito:mockito-core:jar:3.3.3",
-        "androidx.arch.core:core-testing:aar:2.1.0",
+        "androidx.arch.core:core-testing:2.2.0:2.1.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1028
         "build.buf:protovalidate:0.1.9",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1250
