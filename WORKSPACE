@@ -122,8 +122,8 @@ load("//:specs.bzl", "maven")
 maven_install(
     artifacts = [
         "com.google.guava:guava:31.1-jre",
-        "org.hamcrest:hamcrest-core:2.1",
-        "io.netty:netty-tcnative-boringssl-static:2.0.61.Final",
+        "org.hamcrest:hamcrest-core:2.2",
+        "io.netty:netty-tcnative-boringssl-static:2.0.71.Final",
     ],
     maven_install_json = "@rules_jvm_external//:maven_install.json",
     repositories = [
@@ -161,7 +161,7 @@ maven_install(
     name = "global_exclusion_testing",
     artifacts = [
         "com.google.guava:guava:27.0-jre",  # depends on animal-sniffer-annotations and j2objc-annotations
-        "com.squareup.okhttp3:okhttp:3.14.1",  # depends on animal-sniffer-annotations
+        "com.squareup.okhttp3:okhttp:3.14.9",  # depends on animal-sniffer-annotations
         "com.diffplug.durian:durian-core:1.2.0",  # depends on animal-sniffer-annotations and j2objc-annotations
     ],
     excluded_artifacts = [
@@ -181,7 +181,7 @@ maven_install(
     artifacts = [
         "com.google.guava:guava:27.0-jre",
         "javax.inject:javax.inject:1",
-        "org.apache.beam:beam-sdks-java-core:2.15.0",
+        "org.apache.beam:beam-sdks-java-core:2.65.0",
         "org.bouncycastle:bcprov-jdk15on:1.64",
     ],
     maven_install_json = "//tests/custom_maven_install:manifest_stamp_testing_install.json",
@@ -213,7 +213,7 @@ _multiple_lock_files_pinned_maven_install()
 maven_install(
     name = "testing",
     artifacts = [
-        "com.fasterxml.jackson:jackson-bom:2.9.10",
+        "com.fasterxml.jackson:jackson-bom:2.19.0",
         "com.github.fommil.netlib:all:1.1.2",
     ],
     maven_install_json = "@//:foo.json",
@@ -227,10 +227,10 @@ maven_install(
     name = "regression_testing_coursier",
     artifacts = [
         # https://github.com/bazelbuild/rules_jvm_external/issues/74
-        "org.pantsbuild:jarjar:1.6.6",
+        "org.pantsbuild:jarjar:1.7.2",
         # https://github.com/bazelbuild/rules_jvm_external/issues/59
         "junit:junit:4.12",
-        "org.jetbrains.kotlin:kotlin-test:1.3.21",
+        "org.jetbrains.kotlin:kotlin-test:1.9.25",
         # https://github.com/bazelbuild/rules_jvm_external/issues/101
         # As referenced in the issue, daml is not available anymore, hence
         # replacing with another artifact with a classifier.
@@ -241,39 +241,39 @@ maven_install(
         maven.artifact(
             "com.squareup",
             "javapoet",
-            "1.11.1",
+            "1.13.0",
             neverlink = True,
         ),
         # https://github.com/bazelbuild/rules_jvm_external/issues/98
         "com.github.fommil.netlib:all:1.1.2",
-        "nz.ac.waikato.cms.weka:weka-stable:3.8.1",
+        "nz.ac.waikato.cms.weka:weka-stable:3.8.6",
         # https://github.com/bazelbuild/rules_jvm_external/issues/111
         "com.android.support:appcompat-v7:aar:28.0.0",
         "com.google.android.gms:play-services-base:16.1.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/119#issuecomment-484278260
-        "org.apache.flink:flink-test-utils_2.12:1.8.0",
+        "org.apache.flink:flink-test-utils_2.12:1.14.6",
         # https://github.com/bazelbuild/rules_jvm_external/issues/170
-        "ch.epfl.scala:compiler-interface:1.3.0-M4+20-c8a2f9bd",
+        "ch.epfl.scala:compiler-interface:1.3.0-M4+47-d881fa2f",
         # https://github.com/bazelbuild/rules_jvm_external/issues/172
-        "org.openjfx:javafx-base:11.0.1",
+        "org.openjfx:javafx-base:11.0.2",
         # https://github.com/bazelbuild/rules_jvm_external/issues/178
         "io.kubernetes:client-java:4.0.0-beta1",
         # https://github.com/bazelbuild/rules_jvm_external/issues/199
-        "com.google.ar.sceneform.ux:sceneform-ux:1.10.0",
+        "com.google.ar.sceneform.ux:sceneform-ux:1.17.1",
         # https://github.com/bazelbuild/rules_jvm_external/issues/119#issuecomment-504704752
-        "com.github.oshi:oshi-parent:3.4.0",
-        "com.github.spinalhdl:spinalhdl-core_2.11:1.3.6",
-        "com.github.spinalhdl:spinalhdl-lib_2.11:1.3.6",
+        "com.github.oshi:oshi-parent:3.14.0",
+        "com.github.spinalhdl:spinalhdl-core_2.11:1.12.2",
+        "com.github.spinalhdl:spinalhdl-lib_2.11:1.12.2",
         # https://github.com/bazelbuild/rules_jvm_external/issues/201
         "org.apache.kafka:kafka_2.11:2.1.1",
-        "io.confluent:kafka-avro-serializer:5.0.1",
+        "io.confluent:kafka-avro-serializer:5.5.12",
         # https://github.com/bazelbuild/rules_jvm_external/issues/309
-        "io.quarkus.http:quarkus-http-servlet:3.0.0.Beta1",
+        "io.quarkus.http:quarkus-http-servlet:3.1.1.Final",
         # https://github.com/bazelbuild/rules_jvm_external/issues/371
-        "com.fasterxml.jackson:jackson-bom:2.9.10",
-        "org.junit:junit-bom:5.3.1",
+        "com.fasterxml.jackson:jackson-bom:2.19.0",
+        "org.junit:junit-bom:5.12.2",
         # https://github.com/bazelbuild/rules_jvm_external/issues/686
-        "io.netty:netty-tcnative-boringssl-static:2.0.51.Final",
+        "io.netty:netty-tcnative-boringssl-static:2.0.71.Final",
         # https://github.com/bazelbuild/rules_jvm_external/issues/852
         maven.artifact(
             artifact = "jaxb-ri",
@@ -282,14 +282,14 @@ maven_install(
                 "com.sun.xml.bind:jaxb-release-documentation",
             ],
             group = "com.sun.xml.bind",
-            version = "2.3.6",
+            version = "2.3.9",
         ),
         # https://github.com/bazelbuild/rules_jvm_external/issues/865
         maven.artifact(
             artifact = "google-api-services-compute",
             classifier = "javadoc",
             group = "com.google.apis",
-            version = "v1-rev235-1.25.0",
+            version = "v1-rev20250415-2.0.0",
         ),
         # https://github.com/bazelbuild/rules_jvm_external/issues/907
         # Any two platforms to ensure that it doesn't work _only_ under the host operating system
@@ -301,9 +301,9 @@ maven_install(
         "org.mockito:mockito-core:jar:3.3.3",
         "androidx.arch.core:core-testing:aar:2.1.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1028
-        "build.buf:protovalidate:0.1.9",
+        "build.buf:protovalidate:0.8.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1250
-        "com.github.spotbugs:spotbugs:4.7.0",
+        "com.github.spotbugs:spotbugs:4.9.3",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1267
         "org.mockito:mockito-core:pom:3.3.3",
     ],
@@ -391,7 +391,7 @@ maven_install(
             testonly = True,
             artifact = "auto-value-annotations",
             group = "com.google.auto.value",
-            version = "1.6.3",
+            version = "1.11.0",
         ),
     ],
     repositories = [
@@ -403,7 +403,7 @@ maven_install(
     name = "policy_pinned_testing",
     artifacts = [
         # https://github.com/bazelbuild/rules_jvm_external/issues/107
-        "com.google.cloud:google-cloud-storage:1.66.0",
+        "com.google.cloud:google-cloud-storage:1.118.1",
         "com.google.guava:guava:25.0-android",
     ],
     maven_install_json = "//tests/custom_maven_install:policy_pinned_testing_install.json",
@@ -444,7 +444,7 @@ maven_install(
     name = "strict_visibility_with_compat_testing",
     artifacts = [
         # Must not be in any other maven_install where generate_compat_repositories = True
-        "com.google.http-client:google-http-client-gson:1.42.3",
+        "com.google.http-client:google-http-client-gson:1.47.0",
     ],
     generate_compat_repositories = True,
     repositories = [
@@ -471,22 +471,22 @@ pinned_maven_install()
 maven_install(
     name = "duplicate_version_warning",
     artifacts = [
-        "com.fasterxml.jackson.core:jackson-annotations:2.10.1",
-        "com.fasterxml.jackson.core:jackson-annotations:2.12.1",
-        "com.fasterxml.jackson.core:jackson-annotations:2.10.1",
-        "com.fasterxml.jackson.core:jackson-annotations:2.11.2",
-        "com.github.jnr:jffi:1.3.4",
+        "com.fasterxml.jackson.core:jackson-annotations:2.19.0",
+        "com.fasterxml.jackson.core:jackson-annotations:2.19.0",
+        "com.fasterxml.jackson.core:jackson-annotations:2.19.0",
+        "com.fasterxml.jackson.core:jackson-annotations:2.19.0",
+        "com.github.jnr:jffi:1.3.13",
         maven.artifact(
             artifact = "jffi",
             classifier = "native",
             group = "com.github.jnr",
-            version = "1.3.3",
+            version = "1.3.13",
         ),
         maven.artifact(
             artifact = "jffi",
             classifier = "native",
             group = "com.github.jnr",
-            version = "1.3.2",
+            version = "1.3.13",
         ),
     ],
     repositories = [
@@ -498,19 +498,19 @@ maven_install(
 maven_install(
     name = "duplicate_version_warning_same_version",
     artifacts = [
-        "com.fasterxml.jackson.core:jackson-annotations:2.10.1",
-        "com.fasterxml.jackson.core:jackson-annotations:2.10.1",
+        "com.fasterxml.jackson.core:jackson-annotations:2.19.0",
+        "com.fasterxml.jackson.core:jackson-annotations:2.19.0",
         maven.artifact(
             artifact = "jffi",
             classifier = "native",
             group = "com.github.jnr",
-            version = "1.3.3",
+            version = "1.3.13",
         ),
         maven.artifact(
             artifact = "jffi",
             classifier = "native",
             group = "com.github.jnr",
-            version = "1.3.3",
+            version = "1.3.13",
         ),
     ],
     repositories = [
@@ -522,9 +522,9 @@ maven_install(
 maven_install(
     name = "service_indexing_testing",
     artifacts = [
-        "com.google.auto.value:auto-value:1.10.4",
-        "com.google.auto.value:auto-value-annotations:1.10.4",
-        "org.projectlombok:lombok:1.18.22",
+        "com.google.auto.value:auto-value:1.11.0",
+        "com.google.auto.value:auto-value-annotations:1.11.0",
+        "org.projectlombok:lombok:1.18.38",
     ] + [
         maven.artifact(
             testonly = True,  # must be propagated to the generated plugin
@@ -560,7 +560,7 @@ maven_install(
     # testing.
     aar_import_bzl_label = "@build_bazel_rules_android//android:rules.bzl",
     artifacts = [
-        "androidx.work:work-runtime:2.6.0",
+        "androidx.work:work-runtime:2.10.1",
     ],
     fetch_sources = True,
     repositories = [
@@ -600,8 +600,8 @@ maven_install(
     name = "json_artifacts_testing",
     artifacts = [
         "org.json:json:20190722",
-        "io.quarkus:quarkus-maven-plugin:1.0.1.Final",
-        "io.quarkus:quarkus-bom-descriptor-json:1.0.1.Final",
+        "io.quarkus:quarkus-maven-plugin:1.13.7.Final",
+        "io.quarkus:quarkus-bom-descriptor-json:1.9.2.Final",
     ],
     fetch_sources = True,
     maven_install_json = "//tests/custom_maven_install:json_artifacts_testing_install.json",
@@ -615,7 +615,7 @@ maven_install(
 maven_install(
     name = "version_interval_testing",
     artifacts = [
-        "io.grpc:grpc-netty-shaded:1.29.0",
+        "io.grpc:grpc-netty-shaded:1.72.0",
     ],
     repositories = [
         "https://repo1.maven.org/maven2",
@@ -740,7 +740,7 @@ maven_install(
     name = "v1_lock_file_format",
     artifacts = [
         # Coordinates that are in no other `maven_install`
-        "org.seleniumhq.selenium:selenium-remote-driver:4.8.0",
+        "org.seleniumhq.selenium:selenium-remote-driver:4.32.0",
     ],
     generate_compat_repositories = True,
     maven_install_json = "//tests/custom_maven_install:v1_lock_file_format_install.json",
@@ -876,8 +876,8 @@ _java_export_exclusion_testing_pinned_maven_install()
 maven_install(
     name = "override_target_in_deps",
     artifacts = [
-        "io.opentelemetry:opentelemetry-sdk:1.28.0",
-        "redis.clients:jedis:5.0.2",
+        "io.opentelemetry:opentelemetry-sdk:1.50.0",
+        "redis.clients:jedis:5.2.0",
     ],
     maven_install_json = "@rules_jvm_external//tests/custom_maven_install:override_target_in_deps_install.json",
     override_targets = {
@@ -905,7 +905,7 @@ maven_install(
             version = "23.3-jre",
         ),
         # And something that depends on a more recent version of guava
-        "xyz.rogfam:littleproxy:2.1.0",
+        "xyz.rogfam:littleproxy:2.2.0",
     ],
     repositories = [
         "https://repo1.maven.org/maven2",
@@ -928,7 +928,7 @@ maven_install(
                 "org.slf4j:slf4j-api",
             ],
             group = "com.google.auto.value",
-            version = "1.6.3",
+            version = "1.11.0",
         ),
         maven.artifact(
             artifact = "json-lib",
@@ -959,7 +959,7 @@ maven_install(
     # an arbitrary artifact which depends on org.javamoney:moneta:pom
     artifacts = [
         # https://github.com/quarkiverse/quarkus-moneta/blob/2.0.0/runtime/pom.xml#L16-L21
-        "io.quarkiverse.moneta:quarkus-moneta:2.0.0",
+        "io.quarkiverse.moneta:quarkus-moneta:2.1.1",
     ],
     repositories = [
         "https://repo1.maven.org/maven2",
