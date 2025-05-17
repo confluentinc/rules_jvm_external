@@ -282,7 +282,7 @@ maven_install(
                 "com.sun.xml.bind:jaxb-release-documentation",
             ],
             group = "com.sun.xml.bind",
-            version = "2.3.6",
+            version = "4.0.5",
         ),
         # https://github.com/bazelbuild/rules_jvm_external/issues/865
         maven.artifact(
