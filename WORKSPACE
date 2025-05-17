@@ -230,7 +230,7 @@ maven_install(
         "org.pantsbuild:jarjar:1.6.6",
         # https://github.com/bazelbuild/rules_jvm_external/issues/59
         "junit:junit:4.12",
-        "org.jetbrains.kotlin:kotlin-test:1.3.21",
+        "org.jetbrains.kotlin:kotlin-test:2.1.21",
         # https://github.com/bazelbuild/rules_jvm_external/issues/101
         # As referenced in the issue, daml is not available anymore, hence
         # replacing with another artifact with a classifier.
