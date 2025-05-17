@@ -104,8 +104,8 @@ http_file(
 
 http_file(
     name = "buildifier-macos-arm64",
-    sha256 = "d0909b645496608fd6dfc67f95d9d3b01d90736d7b8c8ec41e802cb0b7ceae7c",
-    urls = ["https://github.com/bazelbuild/buildtools/releases/download/v7.1.2/buildifier-darwin-arm64"],
+    sha256 = "5a6afc6ac7a09f5455ba0b89bd99d5ae23b4174dc5dc9d6c0ed5ce8caac3f813",
+    urls = ["https://github.com/bazelbuild/buildtools/releases/download/v7.3.1/buildifier-darwin-arm64"],
 )
 
 http_file(
