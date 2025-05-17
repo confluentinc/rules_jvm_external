@@ -812,11 +812,11 @@ http_file(
 
 http_archive(
     name = "bazel_toolchains",
-    sha256 = "179ec02f809e86abf56356d8898c8bd74069f1bd7c56044050c2cd3d79d0e024",
-    strip_prefix = "bazel-toolchains-4.1.0",
+    sha256 = "ef30f61a17ac7f11a121e90818f85faa7ad27a99b6665bd59201afe17eca5182",
+    strip_prefix = "bazel-toolchains-5124557",
     urls = [
-        "https://github.com/bazelbuild/bazel-toolchains/releases/download/4.1.0/bazel-toolchains-4.1.0.tar.gz",
-        "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/releases/download/4.1.0/bazel-toolchains-4.1.0.tar.gz",
+        "https://github.com/bazelbuild/bazel-toolchains/releases/download/5124557/bazel-toolchains-5124557.tar.gz",
+        "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/releases/download/5124557/bazel-toolchains-5124557.tar.gz",
     ],
 )
 
