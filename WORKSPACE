@@ -27,8 +27,8 @@ rules_jvm_external_setup()
 
 http_archive(
     name = "rules_kotlin",
-    sha256 = "5766f1e599acf551aa56f49dab9ab9108269b03c557496c54acaf41f98e2b8d6",
-    url = "https://github.com/bazelbuild/rules_kotlin/releases/download/v1.9.0/rules_kotlin-v1.9.0.tar.gz",
+    sha256 = "ac1a9a2616775e6929d76c472eabcd93c96b10edced4c45c7e6c4a466edd7dac",
+    url = "https://github.com/bazelbuild/rules_kotlin/releases/download/v2.1.4/rules_kotlin-v2.1.4.tar.gz",
 )
 
 load("@rules_kotlin//kotlin:repositories.bzl", "kotlin_repositories")
