@@ -98,8 +98,8 @@ http_file(
 
 http_file(
     name = "buildifier-linux-x86_64",
-    sha256 = "28285fe7e39ed23dc1a3a525dfcdccbc96c0034ff1d4277905d2672a71b38f13",
-    urls = ["https://github.com/bazelbuild/buildtools/releases/download/v7.1.2/buildifier-linux-amd64"],
+    sha256 = "5474cc5128a74e806783d54081f581662c4be8ae65022f557e9281ed5dc88009",
+    urls = ["https://github.com/bazelbuild/buildtools/releases/download/v7.3.1/buildifier-linux-amd64"],
 )
 
 http_file(
