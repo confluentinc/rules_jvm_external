@@ -403,7 +403,7 @@ maven_install(
     name = "policy_pinned_testing",
     artifacts = [
         # https://github.com/bazelbuild/rules_jvm_external/issues/107
-        "com.google.cloud:google-cloud-storage:1.66.0",
+        "com.google.cloud:google-cloud-storage:2.52.2",
         "com.google.guava:guava:25.0-android",
     ],
     maven_install_json = "//tests/custom_maven_install:policy_pinned_testing_install.json",
