@@ -14,6 +14,7 @@ def java_export(
         excluded_workspaces = {name: None for name in DEFAULT_EXCLUDED_WORKSPACES},
         exclusions = {},
         pom_template = None,
+        allowed_duplicate_names = None,
         visibility = None,
         tags = [],
         testonly = None,
@@ -67,6 +68,8 @@ def java_export(
       maven_coordinates: The maven coordinates for this target.
       pom_template: The template to be used for the pom.xml file.
       manifest_entries: A dict of `String: String` containing additional manifest entry attributes and values.
+      allowed_duplicate_names: A list of `String` containing patterns for files that can be included more than
+        once in the jar file. Examples include `["log4j.properties"]`
       deploy_env: A list of labels of Java targets to exclude from the generated jar.
         [`java_binary`](https://bazel.build/reference/be/java#java_binary) targets are *not*
         supported.
@@ -79,9 +82,9 @@ def java_export(
         Each exclusion is represented as a `group:artifact` string.
       classifier_artifacts: A dict of classifier -> artifact of additional artifacts to publish to Maven.
       doc_deps: Other `javadoc` targets that are referenced by the generated `javadoc` target
-        (if not using `tags = ["no-javadoc"]`)
+        (if not using `tags = ["no-javadocs"]`)
       doc_url: The URL at which the generated `javadoc` will be hosted (if not using
-        `tags = ["no-javadoc"]`).
+        `tags = ["no-javadocs"]`).
       visibility: The visibility of the target
       kwargs: These are passed to [`java_library`](https://bazel.build/reference/be/java#java_library),
       publish_maven_metadata: Whether to publish a maven-metadata.xml
@@ -123,6 +126,7 @@ def java_export(
         excluded_workspaces = excluded_workspaces,
         exclusions = exclusions,
         pom_template = pom_template,
+        allowed_duplicate_names = allowed_duplicate_names,
         visibility = visibility,
         tags = tags,
         testonly = testonly,
@@ -146,6 +150,7 @@ def maven_export(
         excluded_workspaces = {},
         exclusions = {},
         pom_template = None,
+        allowed_duplicate_names = None,
         visibility = None,
         tags = [],
         testonly = False,
@@ -237,6 +242,7 @@ def maven_export(
     manifest_entries = manifest_entries if manifest_entries else {}
     deploy_env = deploy_env if deploy_env else []
     excluded_workspaces = excluded_workspaces if excluded_workspaces else {}
+    allowed_duplicate_names = allowed_duplicate_names if allowed_duplicate_names else []
     doc_url = doc_url if doc_url else ""
     doc_deps = doc_deps if doc_deps else []
     tags = tags if tags else []
@@ -255,6 +261,7 @@ def maven_export(
         deploy_env = deploy_env,
         excluded_workspaces = excluded_workspaces.keys(),
         additional_dependencies = additional_dependencies,
+        allowed_duplicate_names = allowed_duplicate_names,
         visibility = visibility,
         tags = tags + maven_coordinates_tags,
         testonly = testonly,
