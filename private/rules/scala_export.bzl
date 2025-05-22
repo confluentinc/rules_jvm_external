@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:run_binary.bzl", "run_binary")
-load("@io_bazel_rules_scala//scala:scala.bzl", "make_scala_doc_rule", "scala_library", "scaladoc_intransitive_aspect")
+load("@rules_scala//scala:scala.bzl", "make_scala_doc_rule", "scala_library", "scaladoc_intransitive_aspect")
 load(":java_export.bzl", "maven_export")
 load(":maven_project_jar.bzl", "DEFAULT_EXCLUDED_WORKSPACES")
 
