@@ -53,13 +53,14 @@ def format_dep(unpacked, scope = None, indent = 8, include_version = True, exclu
             "    <exclusions>\n",
         ])
         for exclusion in exclusions:
+            group, artifact = exclusion.split(":")
             dependency.extend([
                 whitespace,
                 "        <exclusion>\n",
                 whitespace,
-                "            <groupId>%s</groupId>\n" % exclusion["group"],
+                "            <groupId>%s</groupId>\n" % group,
                 whitespace,
-                "            <artifactId>%s</artifactId>\n" % exclusion["artifact"],
+                "            <artifactId>%s</artifactId>\n" % artifact,
                 whitespace,
                 "        </exclusion>\n",
             ])

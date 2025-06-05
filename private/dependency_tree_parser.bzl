@@ -81,6 +81,8 @@ def _generate_target(
         testonly_artifacts,
         default_visibilities,
         artifact):
+    if artifact.get("exclusions"):
+        print(artifact)
     to_return = []
     simple_coord = strip_packaging_and_classifier_and_version(artifact["coordinates"])
     target_label = escape(simple_coord)
@@ -222,6 +224,11 @@ copy_file(
         target_import_string.append("\t\t\"maven:compile-only\",")
     if artifact.get("sha256"):
         target_import_string.append("\t\t\"maven_sha256=%s\"," % artifact["sha256"])
+    if artifact.get("exclusions"):
+        exclusions_list = artifact["exclusions"]
+        for exclusion in exclusions_list:
+            if exclusion:
+                target_import_string.append("\t\t\"maven_exclusion=%s\"," % exclusion)
     target_import_string.append("\t],")
 
     if packaging == "jar":

@@ -755,6 +755,19 @@ dev_maven.install(
     ],
 )
 
+dev_maven.install(
+    name = "pom_exclusions_testing",
+    artifacts = [],
+)
+
+dev_maven.artifact(
+    name = "pom_exclusions_testing",
+    artifact = "guava",
+    group = "com.google.guava",
+    version = "31.1-jre",
+    exclusions = ["com.google.errorprone:error_prone_annotations"],
+)
+
 # Where there are file locks, the pinned and unpinned repos are listed
 # next to each other. Where compat repositories are created, they are
 # listed next to the repo that created them. The list is otherwise kept
@@ -850,6 +863,7 @@ use_repo(
     "unpinned_v1_lock_file_format",
     "v1_lock_file_format",
     "version_interval_testing",
+    "pom_exclusions_testing",
 )
 
 http_file(

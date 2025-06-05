@@ -42,6 +42,13 @@ def _pom_file_impl(ctx):
         for coords in export_maven_deps
     ]
 
+    for maven_info in info.all_infos.to_list():
+        if maven_info.coordinates and maven_info.exclusions:
+            for exclusion in maven_info.exclusions:
+                if maven_info.coordinates not in exclusions:
+                    exclusions[maven_info.coordinates] = []
+                exclusions[maven_info.coordinates].append(exclusion)
+
     # Expand maven coordinates for any variables to be replaced.
     coordinates = ctx.expand_make_variables("coordinates", info.coordinates, ctx.var)
 

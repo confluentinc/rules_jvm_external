@@ -101,3 +101,18 @@ diff_test(
     file1 = ":pom-example-with-exported-compile-only-dep-pom",
     file2 = "pom-example-with-exported-compile-only-dep.golden.xml",
 )
+
+java_export(
+    name = "pom-example-with-exclusions",
+    srcs = ["PomExample.java"],
+    maven_coordinates = "com.example:app:1.0.0",
+    deps = [
+        "@pom_exclusions_testing//:com_google_guava_guava",
+    ],
+)
+
+diff_test(
+    name = "validate-pom-example-with-exclusions",
+    file1 = ":pom-example-with-exclusions-pom",
+    file2 = "pom-with-exclusions.golden.xml",
+)
