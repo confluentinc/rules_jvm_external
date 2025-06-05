@@ -95,9 +95,9 @@ def _get_artifacts(lock_file_contents):
     services = lock_file_contents.get("services", {})
     exclusions = lock_file_contents.get("exclusions", {
         # Hardcoded for testing right now.
-        "com.google.guava:guava": [
-            "com.google.errorprone:error_prone_annotations",
-        ],
+        #        "com.google.guava:guava": [
+        #            "com.google.errorprone:error_prone_annotations",
+        #        ],
     })
 
     artifacts = []

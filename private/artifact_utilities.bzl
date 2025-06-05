@@ -4,6 +4,7 @@
 
 load("//:specs.bzl", "utils")
 
+# TODO VR: Why isn't all this processing just done in the LockFileConverter?
 def deduplicate_and_sort_artifacts(dep_tree, artifacts, excluded_artifacts, verbose):
     # The deps json returned from coursier can have duplicate artifacts with
     # different dependencies and exclusions. We want to de-duplicate the
@@ -26,6 +27,8 @@ def deduplicate_and_sort_artifacts(dep_tree, artifacts, excluded_artifacts, verb
                 deduped_exclusions["{}:{}".format(e["group"], e["artifact"])] = True
             artifacts_with_exclusions[coordinate] = deduped_exclusions.keys()
 
+    print("Artifacts_with_exclusions: {}".format(artifacts_with_exclusions))
+
     # As we de-duplicate the list keep the duplicate artifacts with exclusions separate
     # so we can look at them and select the one that has the same exclusions
     # Also prefer the duplicates with non-empty dependency lists
@@ -33,6 +36,10 @@ def deduplicate_and_sort_artifacts(dep_tree, artifacts, excluded_artifacts, verb
     deduped_artifacts = {}
     null_artifacts = []
     for artifact in dep_tree["dependencies"]:
+        # Coursier expands the exclusions on an artifact to all of its dependencies.
+        # This is too broad, so we set them to empty and append the exclusion map
+        # to the dep_tree using the user-defined exclusions.
+        artifact["exclusions"] = []
         if artifact["file"] == None:
             null_artifacts.append(artifact)
             continue
@@ -73,5 +80,6 @@ def deduplicate_and_sort_artifacts(dep_tree, artifacts, excluded_artifacts, verb
         sorted_deduped_values.append(deduped_artifacts[key])
 
     dep_tree.update({"dependencies": sorted_deduped_values + null_artifacts})
+    dep_tree.update({"exclusions": artifacts_with_exclusions})
 
     return dep_tree
