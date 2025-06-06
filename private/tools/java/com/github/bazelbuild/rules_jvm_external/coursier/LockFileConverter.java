@@ -102,7 +102,7 @@ public class LockFileConverter {
     Set<Conflict> conflicts = converter.getConflicts();
     Map<String, Set<String>> exclusions = converter.getExclusions();
 
-    Map<String, Object> rendered = new V2LockFile(repositories, infos, conflicts).render();
+    Map<String, Object> rendered = new V2LockFile(repositories, infos, conflicts, exclusions).render();
 
     String converted =
         new GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(rendered);
