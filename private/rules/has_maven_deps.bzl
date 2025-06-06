@@ -1,13 +1,5 @@
 load("@rules_java//java:defs.bzl", "JavaInfo")
 
-## TODO:
-# We need to keep the existing exclusions attribute so that they
-#  can be passed on individual java_exports and merged with the global ones
-# We also need to update the lockfile format to track exclusions
-# I don't know how it works when there is no lockfile yet
-# From the lockfile, we build the jvm_imports and there we should set the
-#  maven_excludes tags
-
 MavenInfo = provider(
     fields = {
         # Fields to do with maven coordinates
