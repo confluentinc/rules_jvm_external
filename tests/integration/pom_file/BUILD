@@ -105,6 +105,13 @@ diff_test(
 java_export(
     name = "pom-example-with-exclusions",
     srcs = ["PomExample.java"],
+    # A java_export specific exclusion
+    exclusions = {
+        # TODO: This might be user friendly to use coordinates instead of targets.
+        "@pom_exclusions_testing//:com_google_guava_guava": [
+            "com.gooogle.guava:failureaccess",
+        ],
+    },
     maven_coordinates = "com.example:app:1.0.0",
     deps = [
         "@pom_exclusions_testing//:com_google_guava_guava",

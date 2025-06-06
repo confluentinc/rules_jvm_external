@@ -29,30 +29,30 @@ def deduplicate_and_sort_artifacts(dep_tree, artifacts, excluded_artifacts, verb
             coordinate = "{}:{}".format(parts[0], parts[1])
             artifacts_with_exclusions[coordinate] = deduped_exclusions.keys()
 
-        # As we de-duplicate the list keep the duplicate artifacts with exclusions separate
-        # so we can look at them and select the one that has the same exclusions
-        # Also prefer the duplicates with non-empty dependency lists
-        duplicate_artifacts_with_exclusions = {}
-        deduped_artifacts = {}
-        null_artifacts = []
-        for artifact in dep_tree["dependencies"]:
-            # Coursier expands the exclusions on an artifact to all of its dependencies.
-            # This is too broad, so we set them to empty and append the exclusion map
-            # to the dep_tree using the user-defined exclusions.
-            artifact["exclusions"] = []
-            if artifact["file"] == None:
-                null_artifacts.append(artifact)
-                continue
-            if artifact["coord"] in artifacts_with_exclusions:
-                if artifact["coord"] in duplicate_artifacts_with_exclusions:
-                    duplicate_artifacts_with_exclusions[artifact["coord"]].append(artifact)
-                else:
-                    duplicate_artifacts_with_exclusions[artifact["coord"]] = [artifact]
-            elif artifact["file"] in deduped_artifacts:
-                if len(artifact["dependencies"]) > 0 and len(deduped_artifacts[artifact["file"]]["dependencies"]) == 0:
-                    deduped_artifacts[artifact["file"]] = artifact
+    # As we de-duplicate the list keep the duplicate artifacts with exclusions separate
+    # so we can look at them and select the one that has the same exclusions
+    # Also prefer the duplicates with non-empty dependency lists
+    duplicate_artifacts_with_exclusions = {}
+    deduped_artifacts = {}
+    null_artifacts = []
+    for artifact in dep_tree["dependencies"]:
+        # Coursier expands the exclusions on an artifact to all of its dependencies.
+        # This is too broad, so we set them to empty and append the exclusion map
+        # to the dep_tree using the user-defined exclusions.
+        artifact["exclusions"] = []
+        if artifact["file"] == None:
+            null_artifacts.append(artifact)
+            continue
+        if artifact["coord"] in artifacts_with_exclusions:
+            if artifact["coord"] in duplicate_artifacts_with_exclusions:
+                duplicate_artifacts_with_exclusions[artifact["coord"]].append(artifact)
             else:
+                duplicate_artifacts_with_exclusions[artifact["coord"]] = [artifact]
+        elif artifact["file"] in deduped_artifacts:
+            if len(artifact["dependencies"]) > 0 and len(deduped_artifacts[artifact["file"]]["dependencies"]) == 0:
                 deduped_artifacts[artifact["file"]] = artifact
+        else:
+            deduped_artifacts[artifact["file"]] = artifact
 
         sorted_deduped_values = []
         for key in sorted(deduped_artifacts.keys()):

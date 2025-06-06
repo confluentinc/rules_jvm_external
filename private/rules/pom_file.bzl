@@ -26,6 +26,15 @@ def _pom_file_impl(ctx):
     }
     exclusions = {k: v for k, v in exclusions.items() if k != None}
 
+    # TODO: This handling for java_export specific exclusions could be simplified if we deal
+    #  with strings instead of dicts.
+    for coords, exclusion_list in exclusions.items():
+        reformatted_exclusion_list = []
+        for exclusion in exclusion_list:
+            reformatted_exclusion_list.append(exclusion["group"] + ":" + exclusion["artifact"])
+        sorted(reformatted_exclusion_list)
+        exclusions[coords] = reformatted_exclusion_list
+
     all_maven_deps = info.maven_deps.to_list()
     export_maven_deps = info.maven_export_deps.to_list()
 
