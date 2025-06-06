@@ -183,6 +183,7 @@ def _render_lock_file(lock_file_contents, input_hash):
     contents.append("  \"services\": %s," % json.encode_indent(lock_file_contents["services"], prefix = "  ", indent = "  "))
     if lock_file_contents.get("skipped"):
         contents.append("  \"skipped\": %s," % json.encode_indent(lock_file_contents["skipped"], prefix = "  ", indent = "  "))
+    contents.append("  \"exclusions\": %s," % json.encode_indent(lock_file_contents["exclusions"], prefix = "  ", indent = "  "))
     contents.append("  \"version\": \"2\"")
     contents.append("}")
     contents.append("")

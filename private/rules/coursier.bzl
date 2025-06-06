@@ -455,6 +455,7 @@ def _pinned_coursier_fetch_impl(repository_ctx):
             "artifacts": {},
             "dependencies": {},
             "repositories": {},
+            "exclusions": {},
             "version": "2",
         }
     else:
