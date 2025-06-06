@@ -25,9 +25,9 @@ def deduplicate_and_sort_artifacts(dep_tree, artifacts, excluded_artifacts, verb
                     deduped_exclusions = {"*:*": True}
                     break
                 deduped_exclusions["{}:{}".format(e["group"], e["artifact"])] = True
+            parts = coordinate.split(":")
+            coordinate = "{}:{}".format(parts[0], parts[1])
             artifacts_with_exclusions[coordinate] = deduped_exclusions.keys()
-
-    print("Artifacts_with_exclusions: {}".format(artifacts_with_exclusions))
 
     # As we de-duplicate the list keep the duplicate artifacts with exclusions separate
     # so we can look at them and select the one that has the same exclusions
