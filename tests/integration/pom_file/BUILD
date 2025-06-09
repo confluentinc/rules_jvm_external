@@ -107,9 +107,8 @@ java_export(
     srcs = ["PomExample.java"],
     # A java_export specific exclusion
     exclusions = {
-        # TODO: This might be user friendly to use coordinates instead of targets.
         "@pom_exclusions_testing//:com_google_guava_guava": [
-            "com.gooogle.guava:failureaccess",
+            "com.google.guava:failureaccess",
         ],
     },
     maven_coordinates = "com.example:app:1.0.0",

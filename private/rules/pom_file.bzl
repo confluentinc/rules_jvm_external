@@ -36,27 +36,28 @@ def _pom_file_impl(ctx):
             coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
             return coords
 
-    exclusions = {
+    exclusions_unsorted = {
         get_exclusion_coordinates(target): json.decode(targetExclusions)
         for target, targetExclusions in ctx.attr.exclusions.items()
     }
-    exclusions = {k: v for k, v in exclusions.items() if k != None}
+    exclusions_unsorted = {k: v for k, v in exclusions_unsorted.items() if k != None}
 
-    for coords, exclusion_list in exclusions.items():
+    for coords, exclusion_list in exclusions_unsorted.items():
         reformatted_exclusion_list = []
         for exclusion in exclusion_list:
             reformatted_exclusion_list.append(exclusion["group"] + ":" + exclusion["artifact"])
-        exclusions[coords] = reformatted_exclusion_list
+        exclusions_unsorted[coords] = reformatted_exclusion_list
 
     for maven_info in info.all_infos.to_list():
         if maven_info.coordinates and maven_info.exclusions:
             for exclusion in maven_info.exclusions:
-                if maven_info.coordinates not in exclusions:
+                if maven_info.coordinates not in exclusions_unsorted:
                     exclusions[maven_info.coordinates] = []
-                exclusions[maven_info.coordinates].append(exclusion)
+                exclusions_unsorted[maven_info.coordinates].append(exclusion)
 
-    for coords in exclusions:
-        sorted(exclusions[coords])
+    exclusions = {}
+    for coords in exclusions_unsorted:
+        exclusions[coords] = sorted(exclusions_unsorted[coords])
 
     # Expand maven coordinates for any variables to be replaced.
     coordinates = ctx.expand_make_variables("coordinates", info.coordinates, ctx.var)
