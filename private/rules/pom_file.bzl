@@ -12,29 +12,6 @@ def _pom_file_impl(ctx):
     artifact_jars = calculate_artifact_jars(info)
     additional_deps = determine_additional_dependencies(artifact_jars, ctx.attr.additional_dependencies)
 
-    def get_exclusion_coordinates(target):
-        if not info.label_to_javainfo.get(target.label):
-            print("Warning: exclusions key %s not found in dependencies" % (target))
-            return None
-        else:
-            coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
-            return coords
-
-    exclusions = {
-        get_exclusion_coordinates(target): json.decode(targetExclusions)
-        for target, targetExclusions in ctx.attr.exclusions.items()
-    }
-    exclusions = {k: v for k, v in exclusions.items() if k != None}
-
-    # TODO: This handling for java_export specific exclusions could be simplified if we deal
-    #  with strings instead of dicts.
-    for coords, exclusion_list in exclusions.items():
-        reformatted_exclusion_list = []
-        for exclusion in exclusion_list:
-            reformatted_exclusion_list.append(exclusion["group"] + ":" + exclusion["artifact"])
-        sorted(reformatted_exclusion_list)
-        exclusions[coords] = reformatted_exclusion_list
-
     all_maven_deps = info.maven_deps.to_list()
     export_maven_deps = info.maven_export_deps.to_list()
 
@@ -51,12 +28,35 @@ def _pom_file_impl(ctx):
         for coords in export_maven_deps
     ]
 
+    def get_exclusion_coordinates(target):
+        if not info.label_to_javainfo.get(target.label):
+            print("Warning: exclusions key %s not found in dependencies" % (target))
+            return None
+        else:
+            coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
+            return coords
+
+    exclusions = {
+        get_exclusion_coordinates(target): json.decode(targetExclusions)
+        for target, targetExclusions in ctx.attr.exclusions.items()
+    }
+    exclusions = {k: v for k, v in exclusions.items() if k != None}
+
+    for coords, exclusion_list in exclusions.items():
+        reformatted_exclusion_list = []
+        for exclusion in exclusion_list:
+            reformatted_exclusion_list.append(exclusion["group"] + ":" + exclusion["artifact"])
+        exclusions[coords] = reformatted_exclusion_list
+
     for maven_info in info.all_infos.to_list():
         if maven_info.coordinates and maven_info.exclusions:
             for exclusion in maven_info.exclusions:
                 if maven_info.coordinates not in exclusions:
                     exclusions[maven_info.coordinates] = []
                 exclusions[maven_info.coordinates].append(exclusion)
+
+    for coords in exclusions:
+        sorted(exclusions[coords])
 
     # Expand maven coordinates for any variables to be replaced.
     coordinates = ctx.expand_make_variables("coordinates", info.coordinates, ctx.var)
