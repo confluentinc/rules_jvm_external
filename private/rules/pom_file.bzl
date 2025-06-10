@@ -52,7 +52,7 @@ def _pom_file_impl(ctx):
         if maven_info.coordinates and maven_info.exclusions:
             for exclusion in maven_info.exclusions:
                 if maven_info.coordinates not in exclusions_unsorted:
-                    exclusions[maven_info.coordinates] = []
+                    exclusions_unsorted[maven_info.coordinates] = []
                 exclusions_unsorted[maven_info.coordinates].append(exclusion)
 
     exclusions = {}
