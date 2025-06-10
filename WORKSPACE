@@ -963,6 +963,9 @@ maven_install(
             version = "31.1-jre",
         ),
     ],
+    excluded_artifacts = [
+        "log4j:log4j",
+    ],
     repositories = [
         "https://repo1.maven.org/maven2",
     ],

@@ -18,8 +18,6 @@ def deduplicate_and_sort_artifacts(dep_tree, artifacts, excluded_artifacts, verb
         coordinate = "{}:{}".format(parts[0], parts[1])
         if "exclusions" in a and len(a["exclusions"]) > 0:
             deduped_exclusions = {}
-            for e in excluded_artifacts:
-                deduped_exclusions["{}:{}".format(e["group"], e["artifact"])] = True
             for e in a["exclusions"]:
                 if e["group"] == "*" and e["artifact"] == "*":
                     deduped_exclusions = {"*:*": True}
