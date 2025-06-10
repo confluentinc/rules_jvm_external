@@ -18,8 +18,6 @@ public class LockFileConverterTest {
   public void testConvertLockFile() throws IOException {
     final Path json = Paths.get(Runfiles.create().rlocation("rules_jvm_external/tests/com/github/bazelbuild/rules_jvm_external/resolver/lockfile/unsorted.json"));
 
-    // convert the json to a map
-
     final LockFileConverter lockFileConverter = new LockFileConverter(Set.of(), json);
 
     lockFileConverter.getDependencies();
