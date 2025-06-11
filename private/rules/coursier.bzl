@@ -455,6 +455,7 @@ def _pinned_coursier_fetch_impl(repository_ctx):
             "artifacts": {},
             "dependencies": {},
             "repositories": {},
+            "exclusions": {},
             "version": "2",
         }
     else:
@@ -1252,6 +1253,9 @@ def _coursier_fetch_impl(repository_ctx):
             artifact.update({"services": service_implementations})
 
     # Keep the original output from coursier for debugging
+    # We moved the exclusions from individual artifacts to a
+    # top-level exclusion key on coursier-deps.json. Because the
+    # coursier output explodes an exclusion to all the transitive deps.
     repository_ctx.file(
         "coursier-deps.json",
         content = json.encode_indent(dep_tree),

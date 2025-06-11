@@ -12,20 +12,6 @@ def _pom_file_impl(ctx):
     artifact_jars = calculate_artifact_jars(info)
     additional_deps = determine_additional_dependencies(artifact_jars, ctx.attr.additional_dependencies)
 
-    def get_exclusion_coordinates(target):
-        if not info.label_to_javainfo.get(target.label):
-            print("Warning: exclusions key %s not found in dependencies" % (target))
-            return None
-        else:
-            coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
-            return coords
-
-    exclusions = {
-        get_exclusion_coordinates(target): json.decode(targetExclusions)
-        for target, targetExclusions in ctx.attr.exclusions.items()
-    }
-    exclusions = {k: v for k, v in exclusions.items() if k != None}
-
     all_maven_deps = info.maven_deps.to_list()
     export_maven_deps = info.maven_export_deps.to_list()
 
@@ -41,6 +27,37 @@ def _pom_file_impl(ctx):
         ctx.expand_make_variables("maven_export_deps", coords, ctx.var)
         for coords in export_maven_deps
     ]
+
+    def get_exclusion_coordinates(target):
+        if not info.label_to_javainfo.get(target.label):
+            print("Warning: exclusions key %s not found in dependencies" % (target))
+            return None
+        else:
+            coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
+            return coords
+
+    exclusions_unsorted = {
+        get_exclusion_coordinates(target): json.decode(targetExclusions)
+        for target, targetExclusions in ctx.attr.exclusions.items()
+    }
+    exclusions_unsorted = {k: v for k, v in exclusions_unsorted.items() if k != None}
+
+    for coords, exclusion_list in exclusions_unsorted.items():
+        reformatted_exclusion_list = []
+        for exclusion in exclusion_list:
+            reformatted_exclusion_list.append(exclusion["group"] + ":" + exclusion["artifact"])
+        exclusions_unsorted[coords] = reformatted_exclusion_list
+
+    for maven_info in info.all_infos.to_list():
+        if maven_info.coordinates and maven_info.exclusions:
+            for exclusion in maven_info.exclusions:
+                if maven_info.coordinates not in exclusions_unsorted:
+                    exclusions_unsorted[maven_info.coordinates] = []
+                exclusions_unsorted[maven_info.coordinates].append(exclusion)
+
+    exclusions = {}
+    for coords in exclusions_unsorted:
+        exclusions[coords] = sorted(exclusions_unsorted[coords])
 
     # Expand maven coordinates for any variables to be replaced.
     coordinates = ctx.expand_make_variables("coordinates", info.coordinates, ctx.var)
