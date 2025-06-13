@@ -126,12 +126,12 @@ public class LockFileConverter {
     Map<String, List<String>> rawExclusions =
         (Map<String, List<String>>) depTree.getOrDefault("exclusions", Collections.EMPTY_LIST);
 
-    Map<String, Set<String>> exclusions = new HashMap<>();
+    Map<String, SortedSet<String>> exclusions = new HashMap<>();
     for (Map.Entry<String, List<String>> entry : rawExclusions.entrySet()) {
       String key = entry.getKey();
       List<String> values = entry.getValue();
 
-      Set<String> valueSet = new HashSet<>(values);
+      SortedSet<String> valueSet = new TreeSet<>(values);
       exclusions.put(key, valueSet);
     }
 
