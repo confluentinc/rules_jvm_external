@@ -261,9 +261,10 @@ json = struct(
 # For example: `coursier fetch group:artifact:version,classifier=xxx,url=yyy`
 #
 def _artifact_to_coord(artifact):
+    version = (":" + artifact["version"]) if artifact.get("version") != None else ":"
     classifier = (",classifier=" + artifact["classifier"]) if artifact.get("classifier") != None else ""
     type = (",type=" + artifact["packaging"]) if artifact.get("packaging") not in (None, "jar") else ""
-    return artifact["group"] + ":" + artifact["artifact"] + ":" + artifact["version"] + classifier + type
+    return artifact["group"] + ":" + artifact["artifact"] + version + classifier + type
 
 #
 # Returns a string "{hostname} {user}:{password}" for a repository_spec
