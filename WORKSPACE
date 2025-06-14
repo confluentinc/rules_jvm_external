@@ -240,7 +240,7 @@ maven_install(
         "com.github.spinalhdl:spinalhdl-core_2.11:1.3.6",
         "com.github.spinalhdl:spinalhdl-lib_2.11:1.3.6",
         # https://github.com/bazelbuild/rules_jvm_external/issues/201
-        "org.apache.kafka:kafka_2.11:2.1.1",
+        "org.apache.kafka:kafka_2.11:5.3.0-ccs",
         "io.confluent:kafka-avro-serializer:5.0.1",
         # https://github.com/bazelbuild/rules_jvm_external/issues/309
         "io.quarkus.http:quarkus-http-servlet:3.0.0.Beta1",
