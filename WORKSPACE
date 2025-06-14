@@ -204,7 +204,7 @@ maven_install(
         # https://github.com/bazelbuild/rules_jvm_external/issues/74
         "org.pantsbuild:jarjar:1.6.6",
         # https://github.com/bazelbuild/rules_jvm_external/issues/59
-        "junit:junit:4.12",
+        "junit:junit:4.13.1",
         "org.jetbrains.kotlin:kotlin-test:1.3.21",
         # https://github.com/bazelbuild/rules_jvm_external/issues/101
         # As referenced in the issue, daml is not available anymore, hence
