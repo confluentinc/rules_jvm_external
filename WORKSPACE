@@ -67,8 +67,8 @@ http_archive(
 # Required for buildifier (`//scripts:buildifier`)
 http_file(
     name = "buildifier-linux-arm64",
-    sha256 = "c22a44eee37b8927167ee6ee67573303f4e31171e7ec3a8ea021a6a660040437",
-    urls = ["https://github.com/bazelbuild/buildtools/releases/download/v7.1.2/buildifier-linux-arm64"],
+    sha256 = "0bf86c4bfffaf4f08eed77bde5b2082e4ae5039a11e2e8b03984c173c34a561c",
+    urls = ["https://github.com/bazelbuild/buildtools/releases/download/v7.3.1/buildifier-linux-arm64"],
 )
 
 http_file(
