@@ -232,7 +232,7 @@ maven_install(
         # https://github.com/bazelbuild/rules_jvm_external/issues/172
         "org.openjfx:javafx-base:11.0.1",
         # https://github.com/bazelbuild/rules_jvm_external/issues/178
-        "io.kubernetes:client-java:4.0.0-beta1",
+        "io.kubernetes:client-java:11.0.1",
         # https://github.com/bazelbuild/rules_jvm_external/issues/199
         "com.google.ar.sceneform.ux:sceneform-ux:1.10.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/119#issuecomment-504704752
