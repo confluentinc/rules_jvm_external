@@ -136,7 +136,7 @@ maven_install(
     name = "global_exclusion_testing",
     artifacts = [
         "com.google.guava:guava:27.0-jre",  # depends on animal-sniffer-annotations and j2objc-annotations
-        "com.squareup.okhttp3:okhttp:3.14.1",  # depends on animal-sniffer-annotations
+        "com.squareup.okhttp3:okhttp:5.0.0",  # depends on animal-sniffer-annotations
         "com.diffplug.durian:durian-core:1.2.0",  # depends on animal-sniffer-annotations and j2objc-annotations
     ],
     excluded_artifacts = [
