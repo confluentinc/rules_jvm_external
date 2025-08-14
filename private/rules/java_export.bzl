@@ -1,4 +1,3 @@
-load("//:specs.bzl", "parse", _json = "json")
 load("@rules_java//java:defs.bzl", "java_library")
 load("//:specs.bzl", "parse", _json = "json")
 load(":javadoc.bzl", "javadoc")

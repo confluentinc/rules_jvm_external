@@ -457,7 +457,6 @@ def _pinned_coursier_fetch_impl(repository_ctx):
             "artifacts": {},
             "dependencies": {},
             "repositories": {},
-            "exclusions": {},
             "version": "2",
         }
     else:
@@ -778,12 +777,7 @@ def _check_artifacts_are_unique(artifacts, duplicate_version_warning):
     if duplicate_artifacts:
         msg_parts = ["Found duplicate artifact versions"]
         for duplicate in duplicate_artifacts:
-            msg_parts.append("    {} has multiple versions {}".format(
-                duplicate,
-                ", ".join(
-                    [str(seen_artifacts.get(duplicate) or "")] + [str(v) for v in duplicate_artifacts.get(duplicate, [])],
-                ),
-            ))
+            msg_parts.append("    {} has multiple versions {}".format(duplicate, ", ".join([seen_artifacts[duplicate]] + duplicate_artifacts[duplicate])))
         msg_parts.append("Please remove duplicate artifacts from the artifact list so you do not get unexpected artifact versions")
         if duplicate_version_warning == "error":
             fail("\n".join(msg_parts))
@@ -1270,9 +1264,6 @@ def _coursier_fetch_impl(repository_ctx):
             artifact.update({"services": service_implementations})
 
     # Keep the original output from coursier for debugging
-    # We moved the exclusions from individual artifacts to a
-    # top-level exclusion key on coursier-deps.json. Because the
-    # coursier output explodes an exclusion to all the transitive deps.
     repository_ctx.file(
         "coursier-deps.json",
         content = json.encode_indent(dep_tree),
