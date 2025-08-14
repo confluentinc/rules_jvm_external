@@ -18,8 +18,8 @@ load("@rules_jvm_external//:defs.bzl", "maven_install", "artifact")
 <pre>
 load("@rules_jvm_external//:defs.bzl", "javadoc")
 
-javadoc(<a href="#javadoc-name">name</a>, <a href="#javadoc-deps">deps</a>, <a href="#javadoc-additional_dependencies">additional_dependencies</a>, <a href="#javadoc-doc_deps">doc_deps</a>, <a href="#javadoc-doc_resources">doc_resources</a>, <a href="#javadoc-doc_url">doc_url</a>, <a href="#javadoc-excluded_workspaces">excluded_workspaces</a>,
-        <a href="#javadoc-javadocopts">javadocopts</a>)
+javadoc(<a href="#javadoc-name">name</a>, <a href="#javadoc-deps">deps</a>, <a href="#javadoc-additional_dependencies">additional_dependencies</a>, <a href="#javadoc-doc_deps">doc_deps</a>, <a href="#javadoc-doc_resources">doc_resources</a>, <a href="#javadoc-doc_url">doc_url</a>, <a href="#javadoc-excluded_packages">excluded_packages</a>,
+        <a href="#javadoc-excluded_workspaces">excluded_workspaces</a>, <a href="#javadoc-included_packages">included_packages</a>, <a href="#javadoc-javadocopts">javadocopts</a>)
 </pre>
 
 Generate a javadoc from all the `deps`
@@ -49,7 +49,7 @@ Generate a javadoc from all the `deps`
 load("@rules_jvm_external//:defs.bzl", "java_export")
 
 java_export(<a href="#java_export-name">name</a>, <a href="#java_export-maven_coordinates">maven_coordinates</a>, <a href="#java_export-manifest_entries">manifest_entries</a>, <a href="#java_export-deploy_env">deploy_env</a>, <a href="#java_export-excluded_workspaces">excluded_workspaces</a>, <a href="#java_export-exclusions">exclusions</a>,
-            <a href="#java_export-pom_template">pom_template</a>, <a href="#java_export-allowed_duplicate_names">allowed_duplicate_names</a>, <a href="#java_export-visibility">visibility</a>, <a href="#java_export-tags">tags</a>, <a href="#java_export-testonly">testonly</a>, <a href="#java_export-classifier_artifacts">classifier_artifacts</a>,
+            <a href="#java_export-pom_template">pom_template</a>, <a href="#java_export-allowed_duplicate_names">allowed_duplicate_names</a>, <a href="#java_export-allowed_duplicate_names">allowed_duplicate_names</a>, <ahref="#java_export-visibility">visibility</a>, <a href="#java_export-tags">tags</a>, <a href="#java_export-testonly">testonly</a>, <a href="#java_export-classifier_artifacts">classifier_artifacts</a>,
             <a href="#java_export-publish_maven_metadata">publish_maven_metadata</a>,
             <a href="#java_export-kwargs">kwargs</a>)
 </pre>
@@ -216,7 +216,7 @@ and fetch Maven artifacts transitively.
 | <a id="maven_install-repositories"></a>repositories |  A list of Maven repository URLs, specified in lookup order.<br><br>Supports URLs with HTTP Basic Authentication, e.g. "https://username:password@example.com".   |  `[]` |
 | <a id="maven_install-artifacts"></a>artifacts |  A list of Maven artifact coordinates in the form of `group:artifact:version`.   |  `[]` |
 | <a id="maven_install-boms"></a>boms |  A list of Maven artifact coordinates in the form of `group:artifact:version` which refer to Maven BOMs.   |  `[]` |
-| <a id="maven_install-resolver"></a>resolver |  Which resolver to use. One of `coursier`, or `maven`.   |  `"coursier"` |
+| <a id="maven_install-resolver"></a>resolver |  Which resolver to use. One of `coursier`, `gradle` or `maven`.   |  `"coursier"` |
 | <a id="maven_install-fail_on_missing_checksum"></a>fail_on_missing_checksum |  fail the fetch if checksum attributes are not present.   |  `True` |
 | <a id="maven_install-fetch_sources"></a>fetch_sources |  Additionally fetch source JARs.   |  `False` |
 | <a id="maven_install-fetch_javadoc"></a>fetch_javadoc |  Additionally fetch javadoc JARs.   |  `False` |
@@ -230,7 +230,7 @@ and fetch Maven artifacts transitively.
 | <a id="maven_install-resolve_timeout"></a>resolve_timeout |  The execution timeout of resolving and fetching artifacts.   |  `600` |
 | <a id="maven_install-additional_netrc_lines"></a>additional_netrc_lines |  Additional lines prepended to the netrc file used by `http_file` (with `maven_install_json` only).   |  `[]` |
 | <a id="maven_install-use_credentials_from_home_netrc_file"></a>use_credentials_from_home_netrc_file |  Whether to pass machine login credentials from the ~/.netrc file to coursier.   |  `False` |
-| <a id="maven_install-fail_if_repin_required"></a>fail_if_repin_required |  Whether to fail the build if the required maven artifacts have been changed but not repinned. Requires the `maven_install_json` to have been set.   |  `False` |
+| <a id="maven_install-fail_if_repin_required"></a>fail_if_repin_required |  Whether to fail the build if the required maven artifacts have been changed but not repinned. Requires the `maven_install_json` to have been set.   |  `True` |
 | <a id="maven_install-use_starlark_android_rules"></a>use_starlark_android_rules |  Whether to use the native or Starlark version of the Android rules. Default is False.   |  `False` |
 | <a id="maven_install-aar_import_bzl_label"></a>aar_import_bzl_label |  The label (as a string) to use to import aar_import from. This is usually needed only if the top-level workspace file does not use the typical default repository name to import the Android Starlark rules. Default is "@build_bazel_rules_android//rules:rules.bzl".   |  `"@build_bazel_rules_android//android:rules.bzl"` |
 | <a id="maven_install-duplicate_version_warning"></a>duplicate_version_warning |  What to do if an artifact is specified multiple times. If "error" then fail the build, if "warn" then print a message and continue, if "none" then do nothing. The default is "warn".   |  `"warn"` |

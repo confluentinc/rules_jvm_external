@@ -27,11 +27,13 @@ load(
     "match_group_and_artifact",
     "strip_packaging_and_classifier",
     "strip_packaging_and_classifier_and_version",
+    "to_repository_name",
 )
-load("//private/lib:coordinates.bzl", "unpack_coordinates")
+load("//private/lib:coordinates.bzl", "unpack_coordinates", "to_purl")
+load("//private/lib:urls.bzl", "scheme_and_host")
 
 def _genrule_copy_artifact_from_http_file(artifact, visibilities):
-    http_file_repository = escape(artifact["coordinates"])
+    http_file_repository = to_repository_name(artifact["coordinates"])
 
     file = artifact.get("out", artifact["file"])
 
@@ -70,6 +72,19 @@ def _find_repository_url(artifact_url, repositories):
                 longest_match = repository
     return longest_match
 
+def _get_maven_url(artifact_urls):
+    if len(artifact_urls) == 0:
+        return None
+
+    # We want to use the Maven Central repo if it's there
+    # since so much of the world expects that.
+    for url in artifact_urls:
+        if url.startswith("https://repo1.maven.org/maven2/"):
+            return url
+
+    # Return anything
+    return artifact_urls[0]
+
 def _generate_target(
         repository_ctx,
         jar_versionless_target_labels,
@@ -79,6 +94,7 @@ def _generate_target(
         repository_urls,
         neverlink_artifacts,
         testonly_artifacts,
+        exclusions,
         default_visibilities,
         artifact):
     to_return = []
@@ -146,7 +162,7 @@ copy_file(
     visibility = ["//visibility:public"],
 )""".format(
                 dylib = dylib,
-                repository = escape(artifact["coordinates"]),
+                repository = to_repository_name(artifact["coordinates"]),
             ),
         )
 
@@ -209,11 +225,13 @@ copy_file(
     #   ],
 
     coordinates = artifact.get("maven_coordinates", artifact["coordinates"])
+    maven_url = _get_maven_url(artifact["urls"])
+
     target_import_string.append("\ttags = [")
     target_import_string.append("\t\t\"maven_coordinates=%s\"," % coordinates)
     if len(artifact["urls"]):
-        target_import_string.append("\t\t\"maven_url=%s\"," % artifact["urls"][0])
-        repository_url = _find_repository_url(artifact["urls"][0], repository_urls)
+        target_import_string.append("\t\t\"maven_url=%s\"," % maven_url)
+        repository_url = _find_repository_url(maven_url, repository_urls)
         if repository_url:
             target_import_string.append("\t\t\"maven_repository=%s\"," % repository_url)
     else:
@@ -222,23 +240,35 @@ copy_file(
         target_import_string.append("\t\t\"maven:compile-only\",")
     if artifact.get("sha256"):
         target_import_string.append("\t\t\"maven_sha256=%s\"," % artifact["sha256"])
-    if artifact.get("exclusions"):
-        exclusions_list = artifact["exclusions"]
-        for exclusion in exclusions_list:
-            if exclusion:
-                target_import_string.append("\t\t\"maven_exclusion=%s\"," % exclusion)
+    if simple_coord in exclusions:
+        for exclusion in exclusions[simple_coord]:
+            target_import_string.append("\t\t\"maven_exclusion=%s\"," % exclusion)
     target_import_string.append("\t],")
 
     if packaging == "jar":
         target_import_string.append("\tmaven_coordinates = \"%s\"," % coordinates)
         if len(artifact["urls"]):
-            target_import_string.append("\tmaven_url = \"%s\"," % artifact["urls"][0])
+            target_import_string.append("\tmaven_url = \"%s\"," % maven_url)
+
+        package_metadata_name = "%s_package_metadata" % target_label
+        target_import_string.append("\tapplicable_licenses = [\":{}\"],".format(package_metadata_name))
+        to_return.append("""
+package_metadata(
+    name = {package_metadata_name},
+    purl = {purl},
+    visibility = ["//visibility:public"],
+)
+""".format(
+            package_metadata_name = repr(package_metadata_name),
+            purl = repr(to_purl(coordinates, scheme_and_host(maven_url))),
+        ))
     else:
         unpacked = unpack_coordinates(coordinates)
-        url = artifact["urls"][0] if len(artifact["urls"]) else None
+        url = maven_url if len(artifact["urls"]) else None
 
         package_info_name = "%s_package_info" % target_label
-        target_import_string.append("\tapplicable_licenses = [\":%s\"]," % package_info_name)
+        package_metadata_name = "%s_package_metadata" % target_label
+        target_import_string.append("\tapplicable_licenses = [\n\t\t\":{}\",\n\t\t\":{}\",\n\t],".format(package_info_name, package_metadata_name))
         to_return.append("""
 package_info(
     name = {name},
@@ -246,9 +276,17 @@ package_info(
     package_url = {url},
     package_version = {version},
 )
+
+package_metadata(
+    name = {package_metadata_name},
+    purl = {purl},
+    visibility = ["//visibility:public"],
+)
 """.format(
             coordinates = repr(coordinates),
             name = repr(package_info_name),
+            package_metadata_name = repr(package_metadata_name),
+            purl = repr(to_purl(coordinates, scheme_and_host(url))),
             url = repr(url),
             version = repr(unpacked.version),
         ))
@@ -387,7 +425,7 @@ processor_class = "{processor_class}",
 # tree.
 #
 # Made function public for testing.
-def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlink_artifacts, testonly_artifacts, override_targets, skip_maven_local_dependencies):
+def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlink_artifacts, testonly_artifacts, exclusions, override_targets, skip_maven_local_dependencies):
     repository_urls = [json.decode(repository)["repo_url"] for repository in repository_ctx.attr.repositories]
 
     # The list of java_import/aar_import declaration strings to be joined at the end
@@ -439,7 +477,11 @@ def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlin
         simple_coord = strip_packaging_and_classifier_and_version(artifact["coordinates"])
         packaging = get_packaging(artifact["coordinates"])
         target_label = escape(simple_coord)
-        alias_visibility = ""
+        visibility = ""
+        if repository_ctx.attr.strict_visibility and explicit_artifacts.get(simple_coord):
+            visibility = "[\"//visibility:public\"]"
+        else:
+            visibility = "[%s]" % (",".join(["\"%s\"" % v for v in default_visibilities]))
 
         if target_label in seen_imports:
             # Skip if we've seen this target label before. Every versioned artifact is uniquely mapped to a target label.
@@ -450,13 +492,13 @@ def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlin
         elif repository_ctx.attr.fetch_javadoc and get_classifier(artifact["coordinates"]) == "javadoc":
             seen_imports[target_label] = True
             all_imports.append(
-                "filegroup(\n\tname = \"%s\",\n\tsrcs = [\"%s\"],\n\ttags = [\"javadoc\"],\n\tvisibility = [\"//visibility:public\"],\n)" % (target_label, artifact_path),
+                "filegroup(\n\tname = \"%s\",\n\tsrcs = [\"%s\"],\n\ttags = [\"javadoc\"],\n\tvisibility = %s,\n)" % (target_label, artifact_path, visibility),
             )
         elif packaging in ("exe", "json"):
             seen_imports[target_label] = True
-            versioned_target_alias_label = "%s_extension" % escape(artifact["coordinates"])
+            versioned_target_alias_label = "%s_extension" % to_repository_name(artifact["coordinates"])
             all_imports.append(
-                "alias(\n\tname = \"%s\",\n\tactual = \"%s\",\n\tvisibility = [\"//visibility:public\"],\n)" % (target_label, versioned_target_alias_label),
+                "alias(\n\tname = \"%s\",\n\tactual = \"%s\",\n\tvisibility = %s,\n)" % (target_label, versioned_target_alias_label, visibility),
             )
             if repository_ctx.attr.maven_install_json:
                 all_imports.append(_genrule_copy_artifact_from_http_file(artifact, default_visibilities))
@@ -465,7 +507,7 @@ def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlin
             # a jvm_import/aar_import based on information in dep_tree.
             seen_imports[target_label] = True
             all_imports.append(
-                "alias(\n\tname = \"%s\",\n\tactual = \"%s\",\n\tvisibility = [\"//visibility:public\"],)" % (target_label, labels_to_override.get(target_label)),
+                "alias(\n\tname = \"%s\",\n\tactual = \"%s\",\n\tvisibility = %s,)" % (target_label, labels_to_override.get(target_label), visibility),
             )
             if repository_ctx.attr.maven_install_json:
                 # Provide the downloaded artifact as a file target.
@@ -484,6 +526,7 @@ def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlin
                 repository_urls,
                 neverlink_artifacts,
                 testonly_artifacts,
+                exclusions,
                 default_visibilities,
                 raw_artifact,
             ))
@@ -499,6 +542,7 @@ def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlin
                 repository_urls,
                 neverlink_artifacts,
                 testonly_artifacts,
+                exclusions,
                 default_visibilities,
                 artifact,
             ))
@@ -539,12 +583,8 @@ def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlin
             coordinates = artifact.get("maven_coordinates", artifact["coordinates"])
             target_import_string.append("\ttags = [\"maven_coordinates=%s\"]," % coordinates)
 
-            if repository_ctx.attr.strict_visibility and explicit_artifacts.get(simple_coord):
-                target_import_string.append("\tvisibility = [\"//visibility:public\"],")
-                alias_visibility = "\tvisibility = [\"//visibility:public\"],\n"
-            else:
-                target_import_string.append("\tvisibility = [%s]," % (",".join(["\"%s\"" % v for v in default_visibilities])))
-                alias_visibility = "\tvisibility = [%s],\n" % (",".join(["\"%s\"" % v for v in default_visibilities]))
+            alias_visibility = "\tvisibility = %s,\n" % visibility
+            target_import_string.append("\tvisibility = %s," % visibility)
 
             target_import_string.append(")")
 
