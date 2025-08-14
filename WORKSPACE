@@ -426,7 +426,7 @@ maven_install(
     name = "strict_visibility_with_compat_testing",
     artifacts = [
         # Must not be in any other maven_install where generate_compat_repositories = True
-        "com.google.http-client:google-http-client-gson:1.42.3",
+        "com.google.http-client:google-http-client-gson:2.0.0",
     ],
     generate_compat_repositories = True,
     repositories = [
