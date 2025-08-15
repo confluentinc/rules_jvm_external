@@ -160,7 +160,7 @@ bazel_dep(
     # https://github.com/protocolbuffers/protobuf/commit/a80daa2a2caaaac9ebe9ae6bb1b639c2771c5c55
     # This should be ok because we only use protobuf to pull in the google/protobuf/wrappers.proto
     # for testing.
-    version = "29.3",
+    version = "32.0",
     dev_dependency = True,
 )
 bazel_dep(

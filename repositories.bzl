@@ -74,9 +74,9 @@ def rules_jvm_external_deps(
         maybe(
             http_archive,
             name = "protobuf",
-            sha256 = "da288bf1daa6c04d03a9051781caa52aceb9163586bff9aa6cfb12f69b9395aa",
-            strip_prefix = "protobuf-27.0",
-            url = "https://github.com/protocolbuffers/protobuf/releases/download/v27.0/protobuf-27.0.tar.gz",
+            sha256 = "9dfdf08129f025a6c5802613b8ee1395044fecb71d38210ca59ecad283ef68bb",
+            strip_prefix = "protobuf-32.0",
+            url = "https://github.com/protocolbuffers/protobuf/releases/download/v32.0/protobuf-32.0.tar.gz",
         )
 
     maybe(
