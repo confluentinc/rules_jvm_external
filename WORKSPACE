@@ -230,7 +230,7 @@ maven_install(
         # https://github.com/bazelbuild/rules_jvm_external/issues/170
         "ch.epfl.scala:compiler-interface:1.3.0-M4+20-c8a2f9bd",
         # https://github.com/bazelbuild/rules_jvm_external/issues/172
-        "org.openjfx:javafx-base:11.0.1",
+        "org.openjfx:javafx-base:26-ea+3",
         # https://github.com/bazelbuild/rules_jvm_external/issues/178
         "io.kubernetes:client-java:4.0.0-beta1",
         # https://github.com/bazelbuild/rules_jvm_external/issues/199
