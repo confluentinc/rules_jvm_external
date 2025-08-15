@@ -17,8 +17,8 @@ load(
     "//private:coursier_utilities.bzl",
     "SUPPORTED_PACKAGING_TYPES",
     "contains_git_conflict_markers",
-    "escape",
     "is_maven_local_path",
+    "to_repository_name",
 )
 load("//private:dependency_tree_parser.bzl", "parser")
 load("//private:java_utilities.bzl", "build_java_argsfile_content")
@@ -38,6 +38,7 @@ _BUILD = """
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
+load("@package_metadata//rules:package_metadata.bzl", "package_metadata")
 load("@rules_license//rules:package_info.bzl", "package_info")
 load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_plugin")
 load("@rules_jvm_external//private/rules:pin_dependencies.bzl", "pin_dependencies")
@@ -115,6 +116,7 @@ pin_dependencies(
     lock_file = {lock_file},
     jvm_flags = {jvm_flags},
     visibility = ["//visibility:public"],
+    resolver = {resolver},
 )
 """
 
@@ -455,7 +457,6 @@ def _pinned_coursier_fetch_impl(repository_ctx):
             "artifacts": {},
             "dependencies": {},
             "repositories": {},
-            "exclusions": {},
             "version": "2",
         }
     else:
@@ -500,8 +501,6 @@ def _pinned_coursier_fetch_impl(repository_ctx):
     unpinned_pin_target = "@{}//:pin".format(unpinned_repo)
     pin_target = "@{}//:pin".format(user_provided_name)
 
-    repin_instructions = " REPIN=1 bazel run %s\n" % pin_target
-
     user_provided_repin_instructions = repository_ctx.attr.repin_instructions
     repin_instructions = user_provided_repin_instructions if user_provided_repin_instructions else (
         " REPIN=1 bazel run %s\n" % pin_target
@@ -530,7 +529,11 @@ def _pinned_coursier_fetch_impl(repository_ctx):
             )
         elif computed_artifacts_hash != input_artifacts_hash:
             if _get_fail_if_repin_required(repository_ctx):
-                fail("%s_install.json contains an invalid input signature and must be regenerated. " % (user_provided_name) +
+                fail("%s_install.json contains an invalid input signature (expected %s and got %s) and must be regenerated. " % (
+                         user_provided_name,
+                         input_artifacts_hash,
+                         computed_artifacts_hash,
+                     ) +
                      "This typically happens when the maven_install artifacts have been changed but not repinned. " +
                      "PLEASE DO NOT MODIFY THIS FILE DIRECTLY! To generate a new " +
                      "%s_install.json and re-pin the artifacts, please run:\n" % user_provided_name +
@@ -588,7 +591,7 @@ def _pinned_coursier_fetch_impl(repository_ctx):
     netrc_entries = importer.get_netrc_entries(maven_install_json_content)
 
     for artifact in importer.get_artifacts(maven_install_json_content):
-        http_file_repository_name = escape(artifact["coordinates"])
+        http_file_repository_name = to_repository_name(artifact["coordinates"])
         if artifact.get("file"):
             maven_artifacts.extend([artifact["coordinates"]])
             http_files.extend([
@@ -652,6 +655,13 @@ def _pinned_coursier_fetch_impl(repository_ctx):
             a["group"] + ":" + a["artifact"] + (":" + a["classifier"] if "classifier" in a else ""): True
             for a in artifacts
             if a.get("testonly", False)
+        },
+        exclusions = {
+            a["group"] + ":" + a["artifact"]: [
+                e["group"] + ":" + e["artifact"]
+                for e in a.get("exclusions", [])
+            ]
+            for a in artifacts
         },
         override_targets = repository_ctx.attr.override_targets,
         skip_maven_local_dependencies = False,
@@ -717,6 +727,7 @@ def generate_pin_target(repository_ctx, unpinned_pin_target):
             fetch_sources = repr(repository_ctx.attr.fetch_sources),
             fetch_javadocs = repr(repository_ctx.attr.fetch_javadoc),
             lock_file = repr(lock_file_location),
+            resolver = repr(repository_ctx.attr.resolver),
         )
 
 def infer_artifact_path_from_primary_and_repos(primary_url, repository_urls):
@@ -766,12 +777,7 @@ def _check_artifacts_are_unique(artifacts, duplicate_version_warning):
     if duplicate_artifacts:
         msg_parts = ["Found duplicate artifact versions"]
         for duplicate in duplicate_artifacts:
-            msg_parts.append("    {} has multiple versions {}".format(
-                duplicate,
-                ", ".join(
-                    [str(seen_artifacts.get(duplicate) or "")] + [str(v) for v in duplicate_artifacts.get(duplicate, [])],
-                ),
-            ))
+            msg_parts.append("    {} has multiple versions {}".format(duplicate, ", ".join([seen_artifacts[duplicate]] + duplicate_artifacts[duplicate])))
         msg_parts.append("Please remove duplicate artifacts from the artifact list so you do not get unexpected artifact versions")
         if duplicate_version_warning == "error":
             fail("\n".join(msg_parts))
@@ -1258,9 +1264,6 @@ def _coursier_fetch_impl(repository_ctx):
             artifact.update({"services": service_implementations})
 
     # Keep the original output from coursier for debugging
-    # We moved the exclusions from individual artifacts to a
-    # top-level exclusion key on coursier-deps.json. Because the
-    # coursier output explodes an exclusion to all the transitive deps.
     repository_ctx.file(
         "coursier-deps.json",
         content = json.encode_indent(dep_tree),
@@ -1316,6 +1319,13 @@ def _coursier_fetch_impl(repository_ctx):
             a["group"] + ":" + a["artifact"] + (":" + a["classifier"] if "classifier" in a else ""): True
             for a in artifacts
             if a.get("testonly", False)
+        },
+        exclusions = {
+            a["group"] + ":" + a["artifact"]: [
+                e["group"] + ":" + e["artifact"]
+                for e in a.get("exclusions", [])
+            ]
+            for a in artifacts
         },
         override_targets = repository_ctx.attr.override_targets,
         # Skip maven local dependencies if generating the unpinned repository
@@ -1422,7 +1432,7 @@ pinned_coursier_fetch = repository_rule(
         "_compat_repository": attr.label(default = "//private:compat_repository.bzl"),
         "_outdated": attr.label(default = "//private:outdated.sh"),
         "user_provided_name": attr.string(),
-        "resolver": attr.string(doc = "The resolver to use", values = ["coursier", "maven"], default = "coursier"),
+        "resolver": attr.string(doc = "The resolver to use", values = ["coursier", "gradle", "maven"], default = "coursier"),
         "repositories": attr.string_list(),  # list of repository objects, each as json
         "artifacts": attr.string_list(),  # list of artifact objects, each as json
         "boms": attr.string_list(),  # list of bom objects, each as json

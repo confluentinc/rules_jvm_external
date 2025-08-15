@@ -53,8 +53,8 @@ public class CreateJar {
 
   public static void createJar(Path out, Path inputDir) throws IOException {
     try (OutputStream os = Files.newOutputStream(out);
-        ZipOutputStream zos = new ZipOutputStream(os);
-        Stream<Path> walk = Files.walk(inputDir)) {
+         ZipOutputStream zos = new ZipOutputStream(os);
+         Stream<Path> walk = Files.walk(inputDir)) {
 
       walk.sorted(Comparator.naturalOrder())
           .forEachOrdered(
