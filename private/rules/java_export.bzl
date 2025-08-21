@@ -93,8 +93,9 @@ def java_export(
         end of the package name. For example, `com.example.*` will include all the subpackages of `com.example`, while
         `com.example` will include only the files directly in `com.example`
       visibility: The visibility of the target
+      publish_maven_metadata: Whether to publish a maven-metadata.xml to remote repository. Some repositories
+            (like AWS CodeArtifact) require the client to publish this file. It is disabled by default.
       kwargs: These are passed to [`java_library`](https://bazel.build/reference/be/java#java_library),
-      publish_maven_metadata: Whether to publish a maven-metadata.xml
         and so may contain any valid parameter for that rule.
     """
 
@@ -241,7 +242,8 @@ def maven_export(
         end of the package name. For example, `com.example.*` will include all the subpackages of `com.example`, while
         `com.example` will include only the files directly in `com.example`
       visibility: The visibility of the target
-      publish_maven_metadata: Whether to publish a maven-metadata.xml
+      publish_maven_metadata: Whether to publish a maven-metadata.xml to remote repository. Some repositories
+            (like AWS CodeArtifact) require the client to publish this file. It is disabled by default.
       kwargs: These are passed to [`java_library`](https://bazel.build/reference/be/java#java_library),
         and so may contain any valid parameter for that rule.
     """
