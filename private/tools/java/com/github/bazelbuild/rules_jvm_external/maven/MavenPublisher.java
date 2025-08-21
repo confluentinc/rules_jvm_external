@@ -24,12 +24,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 import com.github.bazelbuild.rules_jvm_external.ByteStreams;
-import com.google.api.client.http.GenericUrl;
-import com.google.api.client.http.HttpRequest;
-import com.google.api.client.http.HttpResponse;
-import com.google.api.client.http.HttpResponseException;
-import com.google.api.client.http.HttpTransport;
-import com.google.api.client.http.javanet.NetHttpTransport;
+import com.github.bazelbuild.rules_jvm_external.resolver.netrc.Netrc;
+import com.github.bazelbuild.rules_jvm_external.resolver.remote.HttpDownloader;
 import com.google.auth.Credentials;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.WriteChannel;
@@ -48,7 +44,6 @@ import java.io.UncheckedIOException;
 import java.math.BigInteger;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
@@ -92,14 +87,23 @@ public class MavenPublisher {
   private static final String[] SUPPORTED_SCHEMES = {
     "file:/", "https://", "gs://", "s3://", "artifactregistry://"
   };
+  private static final String[] SUPPORTED_UPLOAD_SCHEMES = {"file:/", "https://", "s3://"};
 
   public static void main(String[] args)
       throws IOException, InterruptedException, ExecutionException, TimeoutException {
     String repo = System.getenv("MAVEN_REPO");
+    boolean publishMavenMetadata = Boolean.parseBoolean(args[3]);
+
     if (!isSchemeSupported(repo)) {
       throw new IllegalArgumentException(
           "Repository must be accessed via the supported schemes: "
               + Arrays.toString(SUPPORTED_SCHEMES));
+    }
+
+    if (!isUploadSchemeSupported(repo)) {
+      throw new IllegalArgumentException(
+          "Repository must be uploaded to via the supported schemes: "
+              + Arrays.toString(SUPPORTED_UPLOAD_SCHEMES));
     }
 
     boolean gpgSign = Boolean.parseBoolean(System.getenv("GPG_SIGN"));
@@ -133,8 +137,6 @@ public class MavenPublisher {
         futures.add(upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata));
       }
 
-      boolean publishMavenMetadata = Boolean.valueOf(args[3]);
-
       if (args.length > 4 && !args[4].isEmpty()) {
         List<String> extraArtifactTuples = Splitter.onPattern(",").splitToList(args[4]);
         for (String artifactTuple : extraArtifactTuples) {
@@ -158,7 +160,9 @@ public class MavenPublisher {
 
       // uploading the maven-metadata.xml signals to cut over to the new version, so it must be at
       // the end.
-      if (publishMavenMetadata) {
+      // publishing the file is opt-in for remote repositories, but always done for local file
+      // repositories.
+      if (publishMavenMetadata || repo.startsWith("file:/")) {
         all = all.thenCompose(Void -> uploadMavenMetadata(repo, credentials, coords));
       }
 
@@ -184,18 +188,27 @@ public class MavenPublisher {
     return false;
   }
 
+  private static boolean isUploadSchemeSupported(String repo) {
+    for (String scheme : SUPPORTED_UPLOAD_SCHEMES) {
+      if (repo.startsWith(scheme)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Download the pre-existing maven-metadata.xml file if it exists. If no such file exists, create
    * a default Metadata with the Coordinates provided.
    */
   private static CompletableFuture<Metadata> downloadExistingMavenMetadata(
-      String repo, Credentials credentials, Coordinates coords) {
+      String repo, Coordinates coords) {
     String mavenMetadataUrl =
         String.format(
             "%s/%s/%s/maven-metadata.xml",
             repo.replaceAll("/$", ""), coords.groupId.replace('.', '/'), coords.artifactId);
 
-    return download(mavenMetadataUrl, credentials)
+    return download(mavenMetadataUrl)
         .thenApply(
             optionalFileContents -> {
               try {
@@ -229,7 +242,7 @@ public class MavenPublisher {
         String.format(
             "%s/%s/%s/maven-metadata.xml",
             repo.replaceAll("/$", ""), coords.groupId.replace('.', '/'), coords.artifactId);
-    return downloadExistingMavenMetadata(repo, credentials, coords)
+    return downloadExistingMavenMetadata(repo, coords)
         .thenCompose(
             metadata -> {
               try {
@@ -374,16 +387,15 @@ public class MavenPublisher {
    * Attempts to download the file at the given targetUrl. Valid protocols are: http(s), file, and
    * s3 at the moment.
    */
-  private static CompletableFuture<Optional<String>> download(
-      String targetUrl, Credentials credentials) {
+  private static CompletableFuture<Optional<String>> download(String targetUrl) {
     if (targetUrl.startsWith("http")) {
-      return httpDownload(targetUrl, credentials);
-    } else if (targetUrl.startsWith("file://")) {
+      return httpDownload(targetUrl);
+    } else if (targetUrl.startsWith("file:/")) {
       return fileDownload(targetUrl);
     } else if (targetUrl.startsWith("s3://")) {
       return s3Download(targetUrl);
     } else {
-      throw new IllegalArgumentException("Unsupported protocol for download.");
+      throw new IllegalArgumentException("Unsupported protocol for download: " + targetUrl);
     }
   }
 
@@ -392,7 +404,7 @@ public class MavenPublisher {
         () -> {
           S3Client s3Client = S3Client.create();
           try {
-            URI s3Uri = new URI(targetUrl);
+            URI s3Uri = URI.create(targetUrl);
             String bucketName = s3Uri.getHost();
             String key = s3Uri.getPath().substring(1);
             GetObjectRequest request =
@@ -402,8 +414,6 @@ public class MavenPublisher {
                 CharStreams.toString(new InputStreamReader(s3Object, StandardCharsets.UTF_8)));
           } catch (IOException e) {
             throw new UncheckedIOException(e);
-          } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
           } catch (S3Exception e) {
             if (e.statusCode() == 404) {
               return Optional.empty();
@@ -418,48 +428,28 @@ public class MavenPublisher {
     return CompletableFuture.supplyAsync(
         () -> {
           try {
-            Path path = Paths.get(new URL(targetUrl).toURI());
+            Path path = Paths.get(URI.create(targetUrl));
             if (!Files.exists(path)) {
               return Optional.empty();
             }
             return Optional.of(Files.readString(path, StandardCharsets.UTF_8));
           } catch (IOException e) {
             throw new UncheckedIOException(e);
-          } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
           }
         });
   }
 
-  private static CompletableFuture<Optional<String>> httpDownload(
-      String targetUrl, Credentials credentials) {
+  private static CompletableFuture<Optional<String>> httpDownload(String targetUrl) {
     return CompletableFuture.supplyAsync(
         () -> {
+          HttpDownloader downloader = new HttpDownloader(Netrc.fromUserHome());
+
+          Path path = downloader.get(URI.create(targetUrl));
+          if (path == null || !Files.exists(path)) {
+            return Optional.empty();
+          }
           try {
-            HttpTransport httpTransport = new NetHttpTransport();
-            HttpRequest request =
-                httpTransport
-                    .createRequestFactory(
-                        initRequest -> {
-                          Map<String, List<String>> authHeaders = credentials.getRequestMetadata();
-                          // Add the authorization headers to the HTTP request
-                          if (authHeaders != null) {
-                            for (Map.Entry<String, List<String>> entry : authHeaders.entrySet()) {
-                              initRequest.getHeaders().put(entry.getKey(), entry.getValue());
-                            }
-                          }
-                        })
-                    .buildGetRequest(new GenericUrl(targetUrl));
-            HttpResponse response = request.execute();
-            return Optional.of(
-                CharStreams.toString(
-                    new InputStreamReader(response.getContent(), StandardCharsets.UTF_8)));
-          } catch (HttpResponseException e) {
-            if (e.getStatusCode() == 404) {
-              return Optional.empty();
-            } else {
-              throw new UncheckedIOException(e);
-            }
+            return Optional.of(Files.readString(path, StandardCharsets.UTF_8));
           } catch (IOException e) {
             throw new UncheckedIOException(e);
           }
@@ -551,7 +541,7 @@ public class MavenPublisher {
   private static Callable<Void> writeFile(String targetUrl, Path toUpload) {
     return () -> {
       LOG.info(String.format("Copying %s to %s", toUpload, targetUrl));
-      Path path = Paths.get(new URL(targetUrl).toURI());
+      Path path = Paths.get(URI.create(targetUrl));
       Files.createDirectories(path.getParent());
       Files.deleteIfExists(path);
       Files.copy(toUpload, path);
@@ -563,7 +553,7 @@ public class MavenPublisher {
   private static Callable<Void> gcsUpload(String targetUrl, Path toUpload) {
     return () -> {
       Storage storage = StorageOptions.getDefaultInstance().getService();
-      URI gsUri = new URI(targetUrl);
+      URI gsUri = URI.create(targetUrl);
       String bucketName = gsUri.getHost();
       String path = gsUri.getPath().substring(1);
 
@@ -581,12 +571,12 @@ public class MavenPublisher {
   private static Callable<Void> s3upload(String targetUrl, Path toUpload) {
     return () -> {
       S3Client s3Client = S3Client.create();
-      URI s3Uri = new URI(targetUrl);
+      URI s3Uri = URI.create(targetUrl);
       String bucketName = s3Uri.getHost();
-      String key = s3Uri.getPath().substring(1);
+      String path = s3Uri.getPath().substring(1);
 
-      LOG.info(String.format("Copying %s to s3://%s/%s", toUpload, bucketName, key));
-      s3Client.putObject(PutObjectRequest.builder().bucket(bucketName).key(key).build(), toUpload);
+      LOG.info(String.format("Copying %s to s3://%s/%s", toUpload, bucketName, path));
+      s3Client.putObject(PutObjectRequest.builder().bucket(bucketName).key(path).build(), toUpload);
 
       return null;
     };

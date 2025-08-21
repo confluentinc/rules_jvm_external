@@ -11,6 +11,9 @@ java_binary(
     visibility = ["//visibility:public"],
     deps = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/netrc",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/remote",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/ui",
         artifact(
             "software.amazon.awssdk:sdk-core",
             repository_name = "rules_jvm_external_deps",
@@ -48,10 +51,6 @@ java_binary(
             repository_name = "rules_jvm_external_deps",
         ),
         artifact(
-            "com.google.http-client:google-http-client",
-            repository_name = "rules_jvm_external_deps",
-        ),
-        artifact(
             "org.apache.maven:maven-repository-metadata",
             repository_name = "rules_jvm_external_deps",
         ),
@@ -67,23 +66,6 @@ java_binary(
         artifact(
             "org.apache.maven:maven-artifact",
             repository_name = "rules_jvm_external_deps",
-        ),
-    ],
-)
-
-java_test(
-    name = "MavenPublisherTest",
-    srcs = [
-        "MavenPublisherTest.java",
-    ],
-    deps = [
-        artifact(
-            "org.apache.maven:maven-repository-metadata",
-            repository_name = "rules_jvm_external_deps",
-        ),
-        artifact(
-            "junit:junit",
-            repository_name = "regression_testing_coursier",
         ),
     ],
 )
