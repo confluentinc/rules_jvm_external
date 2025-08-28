@@ -82,7 +82,6 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 public class MavenPublisher {
 
   private static final Logger LOG = LoggerFactory.getLogger(MavenPublisher.class);
-  private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
   private static final String[] SUPPORTED_SCHEMES = {
     "file:/", "http://", "https://", "gs://", "s3://", "artifactregistry://",
   };
@@ -146,14 +145,16 @@ public class MavenPublisher {
     Path pom = Paths.get(pomPath);
     Path mainArtifact = getPathIfSet(mainArtifactPath);
 
+    ExecutorService executor = Executors.newCachedThreadPool();
     try {
       List<CompletableFuture<Void>> futures = new ArrayList<>();
-      futures.add(upload(repo, credentials, coords, ".pom", pom, signingMetadata));
+      futures.add(upload(repo, credentials, coords, ".pom", pom, signingMetadata, executor));
 
       if (mainArtifact != null) {
         String ext =
             com.google.common.io.Files.getFileExtension(mainArtifact.getFileName().toString());
-        futures.add(upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata));
+        futures.add(
+            upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata, executor));
       }
 
       if (extraArtifacts != null) {
@@ -170,7 +171,8 @@ public class MavenPublisher {
                   coords,
                   String.format("-%s.%s", classifier, ext),
                   artifact,
-                  signingMetadata));
+                  signingMetadata,
+                  executor));
         }
       }
 
@@ -182,12 +184,15 @@ public class MavenPublisher {
       // publishing the file is opt-in for remote repositories, but always done for local file
       // repositories.
       if (publishMavenMetadata || repo.startsWith("file:/")) {
-        all = all.thenCompose(Void -> uploadMavenMetadata(repo, credentials, coords));
+        all = all.thenCompose(Void -> uploadMavenMetadata(repo, credentials, coords, executor));
       }
 
       all.get(30, MINUTES);
     } finally {
-      EXECUTOR.shutdown();
+      // Note: we intentionally do not use a static executor.
+      // executor is per-run to avoid cross-test interference
+      // and is shut down after all tasks complete
+      executor.shutdown();
     }
   }
 
@@ -255,7 +260,7 @@ public class MavenPublisher {
    * hydrated.
    */
   private static CompletableFuture<Void> uploadMavenMetadata(
-      String repo, Credentials credentials, Coordinates coords) {
+      String repo, Credentials credentials, Coordinates coords, ExecutorService executor) {
 
     String mavenMetadataUrl =
         String.format(
@@ -284,7 +289,7 @@ public class MavenPublisher {
                 ByteArrayOutputStream os = new ByteArrayOutputStream();
                 new MetadataXpp3Writer().write(os, metadata);
                 Files.write(newMavenMetadataXml, os.toByteArray());
-                return upload(mavenMetadataUrl, credentials, newMavenMetadataXml);
+                return upload(mavenMetadataUrl, credentials, newMavenMetadataXml, executor);
               } catch (Exception e) {
                 throw new RuntimeException(e);
               }
@@ -297,7 +302,8 @@ public class MavenPublisher {
       Coordinates coords,
       String append,
       Path item,
-      MavenSigning.SigningMetadata signingMetadata)
+      MavenSigning.SigningMetadata signingMetadata,
+      ExecutorService executor)
       throws IOException, InterruptedException {
 
     String base =
@@ -324,22 +330,23 @@ public class MavenPublisher {
     Files.write(sha512, toSha512(toHash).getBytes(UTF_8));
 
     List<CompletableFuture<?>> uploads = new ArrayList<>();
-    uploads.add(upload(String.format("%s%s", base, append), credentials, item));
-    uploads.add(upload(String.format("%s%s.md5", base, append), credentials, md5));
-    uploads.add(upload(String.format("%s%s.sha1", base, append), credentials, sha1));
-    uploads.add(upload(String.format("%s%s.sha256", base, append), credentials, sha256));
-    uploads.add(upload(String.format("%s%s.sha512", base, append), credentials, sha512));
+    uploads.add(upload(String.format("%s%s", base, append), credentials, item, executor));
+    uploads.add(upload(String.format("%s%s.md5", base, append), credentials, md5, executor));
+    uploads.add(upload(String.format("%s%s.sha1", base, append), credentials, sha1, executor));
+    uploads.add(upload(String.format("%s%s.sha256", base, append), credentials, sha256, executor));
+    uploads.add(upload(String.format("%s%s.sha512", base, append), credentials, sha512, executor));
 
     MavenSigning.SigningMethod signingMethod = signingMetadata.signingMethod;
     if (signingMethod.equals(MavenSigning.SigningMethod.GPG)) {
-      uploads.add(upload(String.format("%s%s.asc", base, append), credentials, gpg_sign(item)));
+      uploads.add(
+          upload(String.format("%s%s.asc", base, append), credentials, gpg_sign(item), executor));
     } else if (signingMethod.equals(MavenSigning.SigningMethod.PGP)) {
       uploads.add(
           upload(
               String.format("%s%s.asc", base, append),
               credentials,
-              in_memory_pgp_sign(
-                  item, signingMetadata.signingKey, signingMetadata.signingPassword)));
+              in_memory_pgp_sign(item, signingMetadata.signingKey, signingMetadata.signingPassword),
+              executor));
     }
 
     return CompletableFuture.allOf(uploads.toArray(new CompletableFuture<?>[0]));
@@ -444,7 +451,7 @@ public class MavenPublisher {
   }
 
   private static CompletableFuture<Void> upload(
-      String targetUrl, Credentials credentials, Path toUpload) {
+      String targetUrl, Credentials credentials, Path toUpload, ExecutorService executor) {
     Callable<Void> callable;
     if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
       callable = httpUpload(targetUrl, credentials, toUpload);
@@ -459,7 +466,7 @@ public class MavenPublisher {
     }
 
     CompletableFuture<Void> toReturn = new CompletableFuture<>();
-    EXECUTOR.submit(
+    executor.submit(
         () -> {
           try {
             callable.call();
