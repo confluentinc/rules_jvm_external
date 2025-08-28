@@ -63,16 +63,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeoutException;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.apache.maven.artifact.repository.metadata.Metadata;
 import org.apache.maven.artifact.repository.metadata.Versioning;
 import org.apache.maven.artifact.repository.metadata.io.xpp3.MetadataXpp3Reader;
 import org.apache.maven.artifact.repository.metadata.io.xpp3.MetadataXpp3Writer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -82,17 +81,29 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 
 public class MavenPublisher {
 
-  private static final Logger LOG = Logger.getLogger(MavenPublisher.class.getName());
-  private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(1);
+  private static final Logger LOG = LoggerFactory.getLogger(MavenPublisher.class);
+  private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
   private static final String[] SUPPORTED_SCHEMES = {
-    "file:/", "https://", "gs://", "s3://", "artifactregistry://"
+    "file:/", "https://", "gs://", "s3://", "artifactregistry://", "http://"
   };
-  private static final String[] SUPPORTED_UPLOAD_SCHEMES = {"file:/", "https://", "s3://"};
+  private static final String[] SUPPORTED_UPLOAD_SCHEMES = {"file:/", "https://", "s3://", "http://"};
 
-  public static void main(String[] args)
-      throws IOException, InterruptedException, ExecutionException, TimeoutException {
-    String repo = System.getenv("MAVEN_REPO");
+  public static void main(String[] args) throws Exception{
+
+    if (args.length < 4) {
+      throw new IllegalArgumentException(
+              "Expected at least 3 arguments: <coordinates> <path to pom> <path to main artifact> <publish maven metadata> [<extra artifacts>]");
+    }
+
+    final String repo = System.getenv("MAVEN_REPO");
     boolean publishMavenMetadata = Boolean.parseBoolean(args[3]);
+
+    run(args[0], args[1], args[2], publishMavenMetadata, args.length > 4 ? args[4] : null, repo);
+  }
+
+  public static void run(String coordinates, String pomPath, String mainArtifactPath,
+                         boolean publishMavenMetadata, String extraArtifacts,
+                         String repo) throws Exception {
 
     if (!isSchemeSupported(repo)) {
       throw new IllegalArgumentException(
@@ -115,7 +126,7 @@ public class MavenPublisher {
     MavenSigning.SigningMetadata signingMetadata =
         new MavenSigning.SigningMetadata(gpgSign, useInMemoryPgpKeys, signingKey, signingPassword);
 
-    List<String> parts = Arrays.asList(args[0].split(":"));
+    List<String> parts = Arrays.asList(coordinates.split(":"));
     if (parts.size() != 3) {
       throw new IllegalArgumentException(
           "Coordinates must be a triplet: " + Arrays.toString(parts.toArray()));
@@ -124,8 +135,8 @@ public class MavenPublisher {
     Coordinates coords = new Coordinates(parts.get(0), parts.get(1), parts.get(2));
 
     // Calculate md5 and sha1 for each of the inputs
-    Path pom = Paths.get(args[1]);
-    Path mainArtifact = getPathIfSet(args[2]);
+    Path pom = Paths.get(pomPath);
+    Path mainArtifact = getPathIfSet(mainArtifactPath);
 
     try {
       List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -137,8 +148,8 @@ public class MavenPublisher {
         futures.add(upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata));
       }
 
-      if (args.length > 4 && !args[4].isEmpty()) {
-        List<String> extraArtifactTuples = Splitter.onPattern(",").splitToList(args[4]);
+      if (extraArtifacts != null) {
+        List<String> extraArtifactTuples = Splitter.onPattern(",").splitToList(extraArtifacts);
         for (String artifactTuple : extraArtifactTuples) {
           String[] splits = artifactTuple.split("=");
           String classifier = splits[0];
