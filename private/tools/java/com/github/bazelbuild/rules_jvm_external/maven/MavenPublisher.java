@@ -425,16 +425,15 @@ public class MavenPublisher {
   private static CompletableFuture<Optional<String>> httpDownload(String targetUrl) {
     return CompletableFuture.supplyAsync(
         () -> {
-          HttpDownloader downloader = new HttpDownloader(Netrc.fromUserHome());
+          try (HttpDownloader downloader = new HttpDownloader(Netrc.fromUserHome())) {
+            Path path = downloader.get(URI.create(targetUrl));
+            if (path == null || !Files.exists(path)) {
+              return Optional.empty();
+            }
 
-          Path path = downloader.get(URI.create(targetUrl));
-          if (path == null || !Files.exists(path)) {
-            return Optional.empty();
-          }
-          try {
             return Optional.of(Files.readString(path, StandardCharsets.UTF_8));
-          } catch (IOException e) {
-            throw new UncheckedIOException(e);
+          } catch (Exception e) {
+              throw new RuntimeException(e);
           }
         });
   }
