@@ -10,6 +10,10 @@ import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import static org.junit.Assert.assertTrue;
 
 public class MavenPublisherTest {
 
@@ -21,13 +25,27 @@ public class MavenPublisherTest {
         // Create a temp file called example-project.jar
         File jar = File.createTempFile("example-project", ".jar");
 
+        final Path root = Paths.get(System.getenv("TEST_TMPDIR"));
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         MavenPublisher.run(
                 "com.example:example:1.0.0",
                 pom.getAbsolutePath(),
                 jar.getAbsolutePath(),
                 true,
                 null,
-                Paths.get(System.getenv("TEST_TMPDIR")).toUri().toString());
+                root.toUri().toString(),
+                executor
+                );
+        executor.shutdown();
+
+        Path repoRoot = root.resolve("repository/com/example/example/1.0.0");
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.pom")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.pom.md5")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.pom.sha1")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.jar")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.jar.md5")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.jar.sha1")));
     }
 
     @Test
@@ -64,12 +82,24 @@ public class MavenPublisherTest {
         // Create a temp file called example-project.jar
         File jar = File.createTempFile("example-project", ".jar");
 
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         MavenPublisher.run(
                 "com.example:example:1.0.0",
                 pom.getAbsolutePath(),
                 jar.getAbsolutePath(),
                 true,
                 null,
-                "http://localhost:" + server.getAddress().getPort() + "/repository");
+                "http://localhost:" + server.getAddress().getPort() + "/repository",
+                executor);
+        executor.shutdown();
+        server.stop(0);
+
+        Path repoRoot = root.resolve("repository/com/example/example/1.0.0");
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.pom")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.pom.md5")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.pom.sha1")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.jar")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.jar.md5")));
+        assertTrue(Files.exists(repoRoot.resolve("example-1.0.0.jar.sha1")));
     }
 }
