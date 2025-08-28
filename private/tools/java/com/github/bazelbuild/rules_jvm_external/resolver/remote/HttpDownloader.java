@@ -26,6 +26,7 @@ import com.github.bazelbuild.rules_jvm_external.resolver.netrc.Netrc;
 import com.github.bazelbuild.rules_jvm_external.resolver.ui.AnsiConsoleListener;
 import com.github.bazelbuild.rules_jvm_external.resolver.ui.NullListener;
 import com.github.bazelbuild.rules_jvm_external.resolver.ui.PlainConsoleListener;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.Authenticator;
@@ -46,7 +47,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Logger;
 
-public class HttpDownloader {
+public class HttpDownloader implements Closeable {
 
   private static final int MAX_RETRY_COUNT = 3;
   private static final Set<Integer> RETRY_RESPONSE_CODES = Set.of(500, 502, 503, 504);
@@ -240,5 +241,10 @@ public class HttpDownloader {
 
   private boolean isSuccessful(HttpResponse<?> response) {
     return response.statusCode() > 199 && response.statusCode() < 300;
+  }
+
+  @Override
+  public void close() {
+    this.listener.close();
   }
 }
