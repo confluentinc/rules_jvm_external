@@ -89,13 +89,13 @@ public class MavenPublisher {
   private static final String[] SUPPORTED_UPLOAD_SCHEMES = {
     "file:/", "http://", "https://", "s3://"
   };
-  private static final String[] SUPPORTED_UPLOAD_SCHEMES = {"file:/", "https://", "s3://", "http://"};
 
   public static void main(String[] args) throws Exception {
 
     if (args.length < 4) {
       throw new IllegalArgumentException(
-              "Expected at least 3 arguments: <coordinates> <path to pom> <path to main artifact> <publish maven metadata> [<extra artifacts>]");
+          "Expected at least 3 arguments: <coordinates> <path to pom> <path to main artifact>"
+              + " <publish maven metadata> [<extra artifacts>]");
     }
 
     final String repo = System.getenv("MAVEN_REPO");
@@ -103,16 +103,28 @@ public class MavenPublisher {
     final ExecutorService executorService = Executors.newCachedThreadPool();
 
     try {
-      run(args[0], args[1], args[2], publishMavenMetadata, args.length > 4 ? args[4] : null, repo, executorService);
+      run(
+          args[0],
+          args[1],
+          args[2],
+          publishMavenMetadata,
+          args.length > 4 ? args[4] : null,
+          repo,
+          executorService);
     } finally {
       executorService.shutdown();
     }
   }
 
-  public static void run(String coordinates, String pomPath, String mainArtifactPath,
-                         boolean publishMavenMetadata, String extraArtifacts,
-                         String repo,
-                         Executor executor) throws Exception {
+  public static void run(
+      String coordinates,
+      String pomPath,
+      String mainArtifactPath,
+      boolean publishMavenMetadata,
+      String extraArtifacts,
+      String repo,
+      Executor executor)
+      throws Exception {
 
     if (!isSchemeSupported(repo)) {
       throw new IllegalArgumentException(
@@ -153,7 +165,8 @@ public class MavenPublisher {
     if (mainArtifact != null) {
       String ext =
           com.google.common.io.Files.getFileExtension(mainArtifact.getFileName().toString());
-      futures.add(upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata, executor));
+      futures.add(
+          upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata, executor));
     }
 
     if (extraArtifacts != null) {
@@ -331,14 +344,14 @@ public class MavenPublisher {
 
     MavenSigning.SigningMethod signingMethod = signingMetadata.signingMethod;
     if (signingMethod.equals(MavenSigning.SigningMethod.GPG)) {
-      uploads.add(upload(String.format("%s%s.asc", base, append), credentials, gpg_sign(item), executor));
+      uploads.add(
+          upload(String.format("%s%s.asc", base, append), credentials, gpg_sign(item), executor));
     } else if (signingMethod.equals(MavenSigning.SigningMethod.PGP)) {
       uploads.add(
           upload(
               String.format("%s%s.asc", base, append),
               credentials,
-              in_memory_pgp_sign(
-                  item, signingMetadata.signingKey, signingMetadata.signingPassword),
+              in_memory_pgp_sign(item, signingMetadata.signingKey, signingMetadata.signingPassword),
               executor));
     }
 
@@ -390,7 +403,7 @@ public class MavenPublisher {
   private static CompletableFuture<Optional<String>> s3Download(String targetUrl) {
     return CompletableFuture.supplyAsync(
         () -> {
-          try(S3Client s3Client = S3Client.create()) {
+          try (S3Client s3Client = S3Client.create()) {
             URI s3Uri = URI.create(targetUrl);
             String bucketName = s3Uri.getHost();
             String key = s3Uri.getPath().substring(1);
@@ -437,7 +450,7 @@ public class MavenPublisher {
 
             return Optional.of(Files.readString(path, StandardCharsets.UTF_8));
           } catch (Exception e) {
-              throw new RuntimeException(e);
+            throw new RuntimeException(e);
           }
         });
   }
@@ -465,8 +478,7 @@ public class MavenPublisher {
             throw new RuntimeException(e);
           }
         },
-        executor
-    );
+        executor);
   }
 
   private static Callable<Void> httpUpload(
@@ -561,7 +573,8 @@ public class MavenPublisher {
         String path = s3Uri.getPath().substring(1);
 
         LOG.info("Copying {} to s3://{}/{}", toUpload, bucketName, path);
-        s3Client.putObject(PutObjectRequest.builder().bucket(bucketName).key(path).build(), toUpload);
+        s3Client.putObject(
+            PutObjectRequest.builder().bucket(bucketName).key(path).build(), toUpload);
       }
       return null;
     };
