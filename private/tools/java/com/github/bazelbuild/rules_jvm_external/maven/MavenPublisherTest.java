@@ -82,13 +82,19 @@ public class MavenPublisherTest {
     // Create a temp file called example-project.jar
     File jar = File.createTempFile("example-project", ".jar");
 
+    File testJar = File.createTempFile("example-project-test", ".jar");
+    File docsJar = File.createTempFile("example-project-docs", ".jar");
+
     ExecutorService executor = Executors.newSingleThreadExecutor();
     MavenPublisher.run(
         "com.example:example:1.0.0",
         pom.getAbsolutePath(),
         jar.getAbsolutePath(),
         true,
-        null,
+        "test="
+            + testJar.getAbsolutePath().toString()
+            + ",javadoc="
+            + docsJar.getAbsolutePath().toString(),
         "http://localhost:" + server.getAddress().getPort() + "/repository",
         executor);
     executor.shutdown();

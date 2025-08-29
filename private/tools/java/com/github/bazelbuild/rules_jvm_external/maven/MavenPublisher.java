@@ -33,6 +33,7 @@ import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageOptions;
 import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
 import com.google.common.io.CharStreams;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -169,7 +170,7 @@ public class MavenPublisher {
           upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata, executor));
     }
 
-    if (extraArtifacts != null) {
+    if (!Strings.isNullOrEmpty(extraArtifacts)) {
       List<String> extraArtifactTuples = Splitter.onPattern(",").splitToList(extraArtifacts);
       for (String artifactTuple : extraArtifactTuples) {
         String[] splits = artifactTuple.split("=");
