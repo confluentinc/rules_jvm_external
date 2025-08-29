@@ -26,7 +26,6 @@ import com.github.bazelbuild.rules_jvm_external.resolver.netrc.Netrc;
 import com.github.bazelbuild.rules_jvm_external.resolver.ui.AnsiConsoleListener;
 import com.github.bazelbuild.rules_jvm_external.resolver.ui.NullListener;
 import com.github.bazelbuild.rules_jvm_external.resolver.ui.PlainConsoleListener;
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.Authenticator;
@@ -47,7 +46,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Logger;
 
-public class HttpDownloader implements Closeable {
+public class HttpDownloader implements AutoCloseable {
 
   private static final int MAX_RETRY_COUNT = 3;
   private static final Set<Integer> RETRY_RESPONSE_CODES = Set.of(500, 502, 503, 504);
@@ -100,7 +99,7 @@ public class HttpDownloader implements Closeable {
     boolean consoleAvailable = System.console() != null;
     if (System.getenv("RJE_VERBOSE") != null) {
       return new PlainConsoleListener();
-    } else if (termAvailable && consoleAvailable) {
+    } else if (termAvailable && consoleAvailable || System.getenv("FORCE_ANSI") != null) {
       return new AnsiConsoleListener();
     }
     return new NullListener();
@@ -244,7 +243,7 @@ public class HttpDownloader implements Closeable {
   }
 
   @Override
-  public void close() {
-    this.listener.close();
+  public void close() throws Exception {
+    listener.close();
   }
 }

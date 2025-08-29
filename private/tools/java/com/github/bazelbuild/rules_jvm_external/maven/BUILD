@@ -89,7 +89,6 @@ java_test(
     name = "MavenPublisherTest",
     srcs = ["MavenPublisherTest.java"],
     env = {
-        "MAVEN_REPO": "$TEST_TMPDIR",
     },
     runtime_deps = [
         artifact(
