@@ -100,7 +100,7 @@ public class MavenPublisher {
 
     final String repo = System.getenv("MAVEN_REPO");
     boolean publishMavenMetadata = Boolean.parseBoolean(args[3]);
-    final ExecutorService executorService = Executors.newCachedThreadPool();
+    final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     try {
       run(
@@ -199,7 +199,7 @@ public class MavenPublisher {
       all = all.thenCompose(Void -> uploadMavenMetadata(repo, credentials, coords, executor));
     }
 
-    all.get(30, MINUTES);
+    all.get(5, MINUTES);
   }
 
   private static Path getPathIfSet(String arg) {
