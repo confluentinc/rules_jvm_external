@@ -33,6 +33,7 @@ import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageOptions;
 import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
 import com.google.common.io.CharStreams;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -63,16 +64,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeoutException;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.apache.maven.artifact.repository.metadata.Metadata;
 import org.apache.maven.artifact.repository.metadata.Versioning;
 import org.apache.maven.artifact.repository.metadata.io.xpp3.MetadataXpp3Reader;
 import org.apache.maven.artifact.repository.metadata.io.xpp3.MetadataXpp3Writer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -82,17 +83,49 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 
 public class MavenPublisher {
 
-  private static final Logger LOG = Logger.getLogger(MavenPublisher.class.getName());
-  private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(1);
+  private static final Logger LOG = LoggerFactory.getLogger(MavenPublisher.class);
   private static final String[] SUPPORTED_SCHEMES = {
-    "file:/", "https://", "gs://", "s3://", "artifactregistry://"
+    "file:/", "http://", "https://", "gs://", "s3://", "artifactregistry://",
   };
-  private static final String[] SUPPORTED_UPLOAD_SCHEMES = {"file:/", "https://", "s3://"};
+  private static final String[] SUPPORTED_UPLOAD_SCHEMES = {
+    "file:/", "http://", "https://", "s3://"
+  };
 
-  public static void main(String[] args)
-      throws IOException, InterruptedException, ExecutionException, TimeoutException {
-    String repo = System.getenv("MAVEN_REPO");
+  public static void main(String[] args) throws Exception {
+
+    if (args.length < 4) {
+      throw new IllegalArgumentException(
+          "Expected at least 3 arguments: <coordinates> <path to pom> <path to main artifact>"
+              + " <publish maven metadata> [<extra artifacts>]");
+    }
+
+    final String repo = System.getenv("MAVEN_REPO");
     boolean publishMavenMetadata = Boolean.parseBoolean(args[3]);
+    final ExecutorService executorService = Executors.newSingleThreadExecutor();
+
+    try {
+      run(
+          args[0],
+          args[1],
+          args[2],
+          publishMavenMetadata,
+          args.length > 4 ? args[4] : null,
+          repo,
+          executorService);
+    } finally {
+      executorService.shutdown();
+    }
+  }
+
+  public static void run(
+      String coordinates,
+      String pomPath,
+      String mainArtifactPath,
+      boolean publishMavenMetadata,
+      String extraArtifacts,
+      String repo,
+      Executor executor)
+      throws Exception {
 
     if (!isSchemeSupported(repo)) {
       throw new IllegalArgumentException(
@@ -115,7 +148,7 @@ public class MavenPublisher {
     MavenSigning.SigningMetadata signingMetadata =
         new MavenSigning.SigningMetadata(gpgSign, useInMemoryPgpKeys, signingKey, signingPassword);
 
-    List<String> parts = Arrays.asList(args[0].split(":"));
+    List<String> parts = Arrays.asList(coordinates.split(":"));
     if (parts.size() != 3) {
       throw new IllegalArgumentException(
           "Coordinates must be a triplet: " + Arrays.toString(parts.toArray()));
@@ -124,52 +157,50 @@ public class MavenPublisher {
     Coordinates coords = new Coordinates(parts.get(0), parts.get(1), parts.get(2));
 
     // Calculate md5 and sha1 for each of the inputs
-    Path pom = Paths.get(args[1]);
-    Path mainArtifact = getPathIfSet(args[2]);
+    Path pom = Paths.get(pomPath);
+    Path mainArtifact = getPathIfSet(mainArtifactPath);
 
-    try {
-      List<CompletableFuture<Void>> futures = new ArrayList<>();
-      futures.add(upload(repo, credentials, coords, ".pom", pom, signingMetadata));
+    List<CompletableFuture<Void>> futures = new ArrayList<>();
+    futures.add(upload(repo, credentials, coords, ".pom", pom, signingMetadata, executor));
 
-      if (mainArtifact != null) {
-        String ext =
-            com.google.common.io.Files.getFileExtension(mainArtifact.getFileName().toString());
-        futures.add(upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata));
-      }
-
-      if (args.length > 4 && !args[4].isEmpty()) {
-        List<String> extraArtifactTuples = Splitter.onPattern(",").splitToList(args[4]);
-        for (String artifactTuple : extraArtifactTuples) {
-          String[] splits = artifactTuple.split("=");
-          String classifier = splits[0];
-          Path artifact = Paths.get(splits[1]);
-          String ext = com.google.common.io.Files.getFileExtension(splits[1]);
-          futures.add(
-              upload(
-                  repo,
-                  credentials,
-                  coords,
-                  String.format("-%s.%s", classifier, ext),
-                  artifact,
-                  signingMetadata));
-        }
-      }
-
-      CompletableFuture<Void> all =
-          CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-
-      // uploading the maven-metadata.xml signals to cut over to the new version, so it must be at
-      // the end.
-      // publishing the file is opt-in for remote repositories, but always done for local file
-      // repositories.
-      if (publishMavenMetadata || repo.startsWith("file:/")) {
-        all = all.thenCompose(Void -> uploadMavenMetadata(repo, credentials, coords));
-      }
-
-      all.get(30, MINUTES);
-    } finally {
-      EXECUTOR.shutdown();
+    if (mainArtifact != null) {
+      String ext =
+          com.google.common.io.Files.getFileExtension(mainArtifact.getFileName().toString());
+      futures.add(
+          upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata, executor));
     }
+
+    if (!Strings.isNullOrEmpty(extraArtifacts)) {
+      List<String> extraArtifactTuples = Splitter.onPattern(",").splitToList(extraArtifacts);
+      for (String artifactTuple : extraArtifactTuples) {
+        String[] splits = artifactTuple.split("=");
+        String classifier = splits[0];
+        Path artifact = Paths.get(splits[1]);
+        String ext = com.google.common.io.Files.getFileExtension(splits[1]);
+        futures.add(
+            upload(
+                repo,
+                credentials,
+                coords,
+                String.format("-%s.%s", classifier, ext),
+                artifact,
+                signingMetadata,
+                executor));
+      }
+    }
+
+    CompletableFuture<Void> all =
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+
+    // uploading the maven-metadata.xml signals to cut over to the new version, so it must be at
+    // the end.
+    // publishing the file is opt-in for remote repositories, but always done for local file
+    // repositories.
+    if (publishMavenMetadata || repo.startsWith("file:/")) {
+      all = all.thenCompose(Void -> uploadMavenMetadata(repo, credentials, coords, executor));
+    }
+
+    all.get(5, MINUTES);
   }
 
   private static Path getPathIfSet(String arg) {
@@ -236,7 +267,7 @@ public class MavenPublisher {
    * hydrated.
    */
   private static CompletableFuture<Void> uploadMavenMetadata(
-      String repo, Credentials credentials, Coordinates coords) {
+      String repo, Credentials credentials, Coordinates coords, Executor executor) {
 
     String mavenMetadataUrl =
         String.format(
@@ -265,7 +296,7 @@ public class MavenPublisher {
                 ByteArrayOutputStream os = new ByteArrayOutputStream();
                 new MetadataXpp3Writer().write(os, metadata);
                 Files.write(newMavenMetadataXml, os.toByteArray());
-                return upload(mavenMetadataUrl, credentials, newMavenMetadataXml);
+                return upload(mavenMetadataUrl, credentials, newMavenMetadataXml, executor);
               } catch (Exception e) {
                 throw new RuntimeException(e);
               }
@@ -278,7 +309,8 @@ public class MavenPublisher {
       Coordinates coords,
       String append,
       Path item,
-      MavenSigning.SigningMetadata signingMetadata)
+      MavenSigning.SigningMetadata signingMetadata,
+      Executor executor)
       throws IOException, InterruptedException {
 
     String base =
@@ -305,22 +337,23 @@ public class MavenPublisher {
     Files.write(sha512, toSha512(toHash).getBytes(UTF_8));
 
     List<CompletableFuture<?>> uploads = new ArrayList<>();
-    uploads.add(upload(String.format("%s%s", base, append), credentials, item));
-    uploads.add(upload(String.format("%s%s.md5", base, append), credentials, md5));
-    uploads.add(upload(String.format("%s%s.sha1", base, append), credentials, sha1));
-    uploads.add(upload(String.format("%s%s.sha256", base, append), credentials, sha256));
-    uploads.add(upload(String.format("%s%s.sha512", base, append), credentials, sha512));
+    uploads.add(upload(String.format("%s%s", base, append), credentials, item, executor));
+    uploads.add(upload(String.format("%s%s.md5", base, append), credentials, md5, executor));
+    uploads.add(upload(String.format("%s%s.sha1", base, append), credentials, sha1, executor));
+    uploads.add(upload(String.format("%s%s.sha256", base, append), credentials, sha256, executor));
+    uploads.add(upload(String.format("%s%s.sha512", base, append), credentials, sha512, executor));
 
     MavenSigning.SigningMethod signingMethod = signingMetadata.signingMethod;
     if (signingMethod.equals(MavenSigning.SigningMethod.GPG)) {
-      uploads.add(upload(String.format("%s%s.asc", base, append), credentials, gpg_sign(item)));
+      uploads.add(
+          upload(String.format("%s%s.asc", base, append), credentials, gpg_sign(item), executor));
     } else if (signingMethod.equals(MavenSigning.SigningMethod.PGP)) {
       uploads.add(
           upload(
               String.format("%s%s.asc", base, append),
               credentials,
-              in_memory_pgp_sign(
-                  item, signingMetadata.signingKey, signingMetadata.signingPassword)));
+              in_memory_pgp_sign(item, signingMetadata.signingKey, signingMetadata.signingPassword),
+              executor));
     }
 
     return CompletableFuture.allOf(uploads.toArray(new CompletableFuture<?>[0]));
@@ -371,8 +404,7 @@ public class MavenPublisher {
   private static CompletableFuture<Optional<String>> s3Download(String targetUrl) {
     return CompletableFuture.supplyAsync(
         () -> {
-          S3Client s3Client = S3Client.create();
-          try {
+          try (S3Client s3Client = S3Client.create()) {
             URI s3Uri = URI.create(targetUrl);
             String bucketName = s3Uri.getHost();
             String key = s3Uri.getPath().substring(1);
@@ -411,22 +443,21 @@ public class MavenPublisher {
   private static CompletableFuture<Optional<String>> httpDownload(String targetUrl) {
     return CompletableFuture.supplyAsync(
         () -> {
-          HttpDownloader downloader = new HttpDownloader(Netrc.fromUserHome());
+          try (HttpDownloader downloader = new HttpDownloader(Netrc.fromUserHome())) {
+            Path path = downloader.get(URI.create(targetUrl));
+            if (path == null || !Files.exists(path)) {
+              return Optional.empty();
+            }
 
-          Path path = downloader.get(URI.create(targetUrl));
-          if (path == null || !Files.exists(path)) {
-            return Optional.empty();
-          }
-          try {
             return Optional.of(Files.readString(path, StandardCharsets.UTF_8));
-          } catch (IOException e) {
-            throw new UncheckedIOException(e);
+          } catch (Exception e) {
+            throw new RuntimeException(e);
           }
         });
   }
 
   private static CompletableFuture<Void> upload(
-      String targetUrl, Credentials credentials, Path toUpload) {
+      String targetUrl, Credentials credentials, Path toUpload, Executor executor) {
     Callable<Void> callable;
     if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
       callable = httpUpload(targetUrl, credentials, toUpload);
@@ -440,23 +471,21 @@ public class MavenPublisher {
       callable = writeFile(targetUrl, toUpload);
     }
 
-    CompletableFuture<Void> toReturn = new CompletableFuture<>();
-    EXECUTOR.submit(
+    return CompletableFuture.supplyAsync(
         () -> {
           try {
-            callable.call();
-            toReturn.complete(null);
+            return callable.call();
           } catch (Exception e) {
-            toReturn.completeExceptionally(e);
+            throw new RuntimeException(e);
           }
-        });
-    return toReturn;
+        },
+        executor);
   }
 
   private static Callable<Void> httpUpload(
       String targetUrl, Credentials credentials, Path toUpload) {
     return () -> {
-      LOG.info(String.format("Uploading to %s", targetUrl));
+      LOG.info("Uploading to {}", targetUrl);
       URL url = new URL(targetUrl);
 
       HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -502,14 +531,14 @@ public class MavenPublisher {
           }
         }
       }
-      LOG.info(String.format("Upload to %s complete.", targetUrl));
+      LOG.info("Upload to {} complete.", targetUrl);
       return null;
     };
   }
 
   private static Callable<Void> writeFile(String targetUrl, Path toUpload) {
     return () -> {
-      LOG.info(String.format("Copying %s to %s", toUpload, targetUrl));
+      LOG.info("Copying {} to {}", toUpload, targetUrl);
       Path path = Paths.get(URI.create(targetUrl));
       Files.createDirectories(path.getParent());
       Files.deleteIfExists(path);
@@ -526,7 +555,7 @@ public class MavenPublisher {
       String bucketName = gsUri.getHost();
       String path = gsUri.getPath().substring(1);
 
-      LOG.info(String.format("Copying %s to gs://%s/%s", toUpload, bucketName, path));
+      LOG.info("Copying {} to gs://{}/{}", toUpload, bucketName, path);
       BlobInfo blobInfo = BlobInfo.newBuilder(bucketName, path).build();
       try (WriteChannel writer = storage.writer(blobInfo);
           InputStream is = Files.newInputStream(toUpload)) {
@@ -539,14 +568,15 @@ public class MavenPublisher {
 
   private static Callable<Void> s3upload(String targetUrl, Path toUpload) {
     return () -> {
-      S3Client s3Client = S3Client.create();
-      URI s3Uri = URI.create(targetUrl);
-      String bucketName = s3Uri.getHost();
-      String path = s3Uri.getPath().substring(1);
+      try (S3Client s3Client = S3Client.create()) {
+        URI s3Uri = URI.create(targetUrl);
+        String bucketName = s3Uri.getHost();
+        String path = s3Uri.getPath().substring(1);
 
-      LOG.info(String.format("Copying %s to s3://%s/%s", toUpload, bucketName, path));
-      s3Client.putObject(PutObjectRequest.builder().bucket(bucketName).key(path).build(), toUpload);
-
+        LOG.info("Copying {} to s3://{}/{}", toUpload, bucketName, path);
+        s3Client.putObject(
+            PutObjectRequest.builder().bucket(bucketName).key(path).build(), toUpload);
+      }
       return null;
     };
   }
