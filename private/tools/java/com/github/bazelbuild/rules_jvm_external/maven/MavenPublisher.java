@@ -24,6 +24,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 import com.github.bazelbuild.rules_jvm_external.ByteStreams;
+import com.github.bazelbuild.rules_jvm_external.maven.MavenSigning.SigningMetadata;
 import com.github.bazelbuild.rules_jvm_external.resolver.netrc.Netrc;
 import com.github.bazelbuild.rules_jvm_external.resolver.remote.HttpDownloader;
 import com.google.auth.Credentials;
@@ -113,6 +114,16 @@ public class MavenPublisher {
           args[3]);
     }
     boolean publishMavenMetadata = Boolean.parseBoolean(args[3]);
+
+    boolean gpgSign = Boolean.parseBoolean(System.getenv("GPG_SIGN"));
+    Credentials credentials =
+            new BasicAuthCredentials(System.getenv("MAVEN_USER"), System.getenv("MAVEN_PASSWORD"));
+    boolean useInMemoryPgpKeys = Boolean.parseBoolean(System.getenv("USE_IN_MEMORY_PGP_KEYS"));
+    String signingKey = System.getenv("PGP_SIGNING_KEY");
+    String signingPassword = System.getenv("PGP_SIGNING_PWD");
+    SigningMetadata signingMetadata =
+            new SigningMetadata(gpgSign, useInMemoryPgpKeys, signingKey, signingPassword);
+
     final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     try {
@@ -123,19 +134,23 @@ public class MavenPublisher {
           publishMavenMetadata,
           args.length > 4 ? args[4] : null,
           repo,
+          credentials,
+          signingMetadata,
           executorService);
     } finally {
       executorService.shutdown();
     }
   }
 
-  public static void run(
+  protected static void run(
       String coordinates,
       String pomPath,
       String mainArtifactPath,
       boolean publishMavenMetadata,
       @Nullable String extraArtifacts,
       String repo,
+      @Nullable Credentials credentials,
+      SigningMetadata signingMetadata,
       Executor executor)
       throws Exception {
 
@@ -150,15 +165,6 @@ public class MavenPublisher {
           "Repository must be uploaded to via the supported schemes: "
               + Arrays.toString(SUPPORTED_UPLOAD_SCHEMES));
     }
-
-    boolean gpgSign = Boolean.parseBoolean(System.getenv("GPG_SIGN"));
-    Credentials credentials =
-        new BasicAuthCredentials(System.getenv("MAVEN_USER"), System.getenv("MAVEN_PASSWORD"));
-    boolean useInMemoryPgpKeys = Boolean.parseBoolean(System.getenv("USE_IN_MEMORY_PGP_KEYS"));
-    String signingKey = System.getenv("PGP_SIGNING_KEY");
-    String signingPassword = System.getenv("PGP_SIGNING_PWD");
-    MavenSigning.SigningMetadata signingMetadata =
-        new MavenSigning.SigningMetadata(gpgSign, useInMemoryPgpKeys, signingKey, signingPassword);
 
     List<String> parts = Arrays.asList(coordinates.split(":"));
     if (parts.size() != 3) {
@@ -321,7 +327,7 @@ public class MavenPublisher {
       Coordinates coords,
       String append,
       Path item,
-      MavenSigning.SigningMetadata signingMetadata,
+      SigningMetadata signingMetadata,
       Executor executor)
       throws IOException, InterruptedException {
 

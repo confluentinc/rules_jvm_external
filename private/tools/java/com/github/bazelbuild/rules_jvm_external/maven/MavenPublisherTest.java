@@ -2,6 +2,7 @@ package com.github.bazelbuild.rules_jvm_external.maven;
 
 import static org.junit.Assert.assertTrue;
 
+import com.github.bazelbuild.rules_jvm_external.maven.MavenSigning.SigningMetadata;
 import com.sun.net.httpserver.HttpServer;
 import java.io.File;
 import java.io.InputStream;
@@ -34,6 +35,8 @@ public class MavenPublisherTest {
         true,
         null,
         root.toUri().toString(),
+        null,
+        SigningMetadata.noSigner(),
         executor);
     executor.shutdown();
 
@@ -96,6 +99,8 @@ public class MavenPublisherTest {
             + ",javadoc="
             + docsJar.getAbsolutePath(),
         "http://localhost:" + server.getAddress().getPort() + "/repository",
+        null,
+        SigningMetadata.noSigner(),
         executor);
     executor.shutdown();
     server.stop(0);
