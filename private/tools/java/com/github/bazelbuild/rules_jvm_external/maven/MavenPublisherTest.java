@@ -92,9 +92,9 @@ public class MavenPublisherTest {
         jar.getAbsolutePath(),
         true,
         "test="
-            + testJar.getAbsolutePath().toString()
+            + testJar.getAbsolutePath()
             + ",javadoc="
-            + docsJar.getAbsolutePath().toString(),
+            + docsJar.getAbsolutePath(),
         "http://localhost:" + server.getAddress().getPort() + "/repository",
         executor);
     executor.shutdown();
