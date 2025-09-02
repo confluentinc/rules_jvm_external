@@ -19,11 +19,13 @@ package com.github.bazelbuild.rules_jvm_external.maven;
 
 import static com.github.bazelbuild.rules_jvm_external.maven.MavenSigning.gpg_sign;
 import static com.github.bazelbuild.rules_jvm_external.maven.MavenSigning.in_memory_pgp_sign;
+import static com.google.common.io.Files.getFileExtension;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
 import com.github.bazelbuild.rules_jvm_external.ByteStreams;
+import com.github.bazelbuild.rules_jvm_external.maven.MavenSigning.SigningMetadata;
 import com.github.bazelbuild.rules_jvm_external.resolver.netrc.Netrc;
 import com.github.bazelbuild.rules_jvm_external.resolver.remote.HttpDownloader;
 import com.google.auth.Credentials;
@@ -68,6 +70,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import org.apache.maven.artifact.repository.metadata.Metadata;
 import org.apache.maven.artifact.repository.metadata.Versioning;
 import org.apache.maven.artifact.repository.metadata.io.xpp3.MetadataXpp3Reader;
@@ -100,7 +103,28 @@ public class MavenPublisher {
     }
 
     final String repo = System.getenv("MAVEN_REPO");
+    if (Strings.isNullOrEmpty(repo)) {
+      throw new IllegalArgumentException("MAVEN_REPO environment variable must be set");
+    }
+
+    // give friendly warning if true/false not explicitly set as args[3]
+    if (!"true".equalsIgnoreCase(args[3]) && !"false".equalsIgnoreCase(args[3])) {
+      LOG.warn(
+          "Fourth argument <publish maven metadata> should be true or false. Found: {}. Defaulting"
+              + " to false.",
+          args[3]);
+    }
     boolean publishMavenMetadata = Boolean.parseBoolean(args[3]);
+
+    boolean gpgSign = Boolean.parseBoolean(System.getenv("GPG_SIGN"));
+    Credentials credentials =
+        new BasicAuthCredentials(System.getenv("MAVEN_USER"), System.getenv("MAVEN_PASSWORD"));
+    boolean useInMemoryPgpKeys = Boolean.parseBoolean(System.getenv("USE_IN_MEMORY_PGP_KEYS"));
+    String signingKey = System.getenv("PGP_SIGNING_KEY");
+    String signingPassword = System.getenv("PGP_SIGNING_PWD");
+    SigningMetadata signingMetadata =
+        new SigningMetadata(gpgSign, useInMemoryPgpKeys, signingKey, signingPassword);
+
     final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     try {
@@ -111,19 +135,23 @@ public class MavenPublisher {
           publishMavenMetadata,
           args.length > 4 ? args[4] : null,
           repo,
+          credentials,
+          signingMetadata,
           executorService);
     } finally {
       executorService.shutdown();
     }
   }
 
-  public static void run(
+  protected static void run(
       String coordinates,
       String pomPath,
       String mainArtifactPath,
       boolean publishMavenMetadata,
-      String extraArtifacts,
+      @Nullable String extraArtifacts,
       String repo,
+      @Nullable Credentials credentials,
+      SigningMetadata signingMetadata,
       Executor executor)
       throws Exception {
 
@@ -139,36 +167,23 @@ public class MavenPublisher {
               + Arrays.toString(SUPPORTED_UPLOAD_SCHEMES));
     }
 
-    boolean gpgSign = Boolean.parseBoolean(System.getenv("GPG_SIGN"));
-    Credentials credentials =
-        new BasicAuthCredentials(System.getenv("MAVEN_USER"), System.getenv("MAVEN_PASSWORD"));
-    boolean useInMemoryPgpKeys = Boolean.parseBoolean(System.getenv("USE_IN_MEMORY_PGP_KEYS"));
-    String signingKey = System.getenv("PGP_SIGNING_KEY");
-    String signingPassword = System.getenv("PGP_SIGNING_PWD");
-    MavenSigning.SigningMetadata signingMetadata =
-        new MavenSigning.SigningMetadata(gpgSign, useInMemoryPgpKeys, signingKey, signingPassword);
-
-    List<String> parts = Arrays.asList(coordinates.split(":"));
-    if (parts.size() != 3) {
-      throw new IllegalArgumentException(
-          "Coordinates must be a triplet: " + Arrays.toString(parts.toArray()));
-    }
-
-    Coordinates coords = new Coordinates(parts.get(0), parts.get(1), parts.get(2));
+    final Coordinates coords = Coordinates.fromString(coordinates);
 
     // Calculate md5 and sha1 for each of the inputs
     Path pom = Paths.get(pomPath);
-    Path mainArtifact = getPathIfSet(mainArtifactPath);
 
     List<CompletableFuture<Void>> futures = new ArrayList<>();
     futures.add(upload(repo, credentials, coords, ".pom", pom, signingMetadata, executor));
 
-    if (mainArtifact != null) {
-      String ext =
-          com.google.common.io.Files.getFileExtension(mainArtifact.getFileName().toString());
-      futures.add(
-          upload(repo, credentials, coords, "." + ext, mainArtifact, signingMetadata, executor));
-    }
+    futures.add(
+        upload(
+            repo,
+            credentials,
+            coords,
+            "." + getFileExtension(mainArtifactPath),
+            Paths.get(mainArtifactPath),
+            signingMetadata,
+            executor));
 
     if (!Strings.isNullOrEmpty(extraArtifacts)) {
       List<String> extraArtifactTuples = Splitter.onPattern(",").splitToList(extraArtifacts);
@@ -176,7 +191,7 @@ public class MavenPublisher {
         String[] splits = artifactTuple.split("=");
         String classifier = splits[0];
         Path artifact = Paths.get(splits[1]);
-        String ext = com.google.common.io.Files.getFileExtension(splits[1]);
+        String ext = getFileExtension(splits[1]);
         futures.add(
             upload(
                 repo,
@@ -201,13 +216,6 @@ public class MavenPublisher {
     }
 
     all.get(5, MINUTES);
-  }
-
-  private static Path getPathIfSet(String arg) {
-    if (!arg.isEmpty()) {
-      return Paths.get(arg);
-    }
-    return null;
   }
 
   private static boolean isSchemeSupported(String repo) {
@@ -285,7 +293,7 @@ public class MavenPublisher {
                 versioning.setRelease(coords.version);
                 // This may be needed for SNAPSHOT support
                 String timestamp = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-                versioning.setLastUpdated("20200731090423");
+                versioning.setLastUpdated(timestamp);
                 versioning.getVersions().add(coords.version);
                 // Let's handle adding multiple versions many times by turning it back to a set
                 versioning.setVersions(
@@ -309,7 +317,7 @@ public class MavenPublisher {
       Coordinates coords,
       String append,
       Path item,
-      MavenSigning.SigningMetadata signingMetadata,
+      SigningMetadata signingMetadata,
       Executor executor)
       throws IOException, InterruptedException {
 
@@ -598,6 +606,15 @@ public class MavenPublisher {
       this.groupId = groupId;
       this.artifactId = artifactId;
       this.version = version;
+    }
+
+    private static Coordinates fromString(String coordinates) {
+      String[] parts = coordinates.split(":");
+      if (parts.length != 3) {
+        throw new IllegalArgumentException(
+            "Coordinates must be a triplet: " + Arrays.toString(parts));
+      }
+      return new Coordinates(parts[0], parts[1], parts[2]);
     }
   }
 
