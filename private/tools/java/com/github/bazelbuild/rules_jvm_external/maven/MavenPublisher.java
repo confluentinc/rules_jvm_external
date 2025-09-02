@@ -285,7 +285,7 @@ public class MavenPublisher {
                 versioning.setRelease(coords.version);
                 // This may be needed for SNAPSHOT support
                 String timestamp = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-                versioning.setLastUpdated("20200731090423");
+                versioning.setLastUpdated(timestamp);
                 versioning.getVersions().add(coords.version);
                 // Let's handle adding multiple versions many times by turning it back to a set
                 versioning.setVersions(
