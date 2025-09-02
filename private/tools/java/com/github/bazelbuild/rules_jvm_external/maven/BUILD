@@ -30,6 +30,10 @@ java_library(
             repository_name = "rules_jvm_external_deps",
         ),
         artifact(
+            "com.google.code.findbugs:jsr305",
+            repository_name = "rules_jvm_external_deps",
+        ),
+        artifact(
             "software.amazon.awssdk:sdk-core",
             repository_name = "rules_jvm_external_deps",
         ),

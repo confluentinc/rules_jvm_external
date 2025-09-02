@@ -81,6 +81,8 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
+import javax.annotation.Nullable;
+
 public class MavenPublisher {
 
   private static final Logger LOG = LoggerFactory.getLogger(MavenPublisher.class);
@@ -100,6 +102,16 @@ public class MavenPublisher {
     }
 
     final String repo = System.getenv("MAVEN_REPO");
+    if (Strings.isNullOrEmpty(repo)) {
+        throw new IllegalArgumentException("MAVEN_REPO environment variable must be set");
+    }
+
+    // give friendly warning if true/false not explicitly set as args[3]
+    if (!"true".equalsIgnoreCase(args[3]) && !"false".equalsIgnoreCase(args[3])) {
+      LOG.warn(
+          "Fourth argument <publish maven metadata> should be true or false. Found: {}. Defaulting to false.",
+          args[3]);
+    }
     boolean publishMavenMetadata = Boolean.parseBoolean(args[3]);
     final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
@@ -122,7 +134,7 @@ public class MavenPublisher {
       String pomPath,
       String mainArtifactPath,
       boolean publishMavenMetadata,
-      String extraArtifacts,
+      @Nullable String extraArtifacts,
       String repo,
       Executor executor)
       throws Exception {
