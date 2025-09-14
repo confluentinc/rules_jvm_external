@@ -306,7 +306,7 @@ maven_install(
         "org.mockito:mockito-core:3.3.3@jar",
         "androidx.arch.core:core-testing:2.1.0@aar",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1028
-        "build.buf:protovalidate:0.1.9",
+        "build.buf:protovalidate:1.0.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1250
         "com.github.spotbugs:spotbugs:4.7.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1267
