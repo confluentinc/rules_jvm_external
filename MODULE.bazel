@@ -1147,25 +1147,3 @@ http_file(
         "https://repo1.maven.org/maven2/org/projectlombok/lombok/1.18.22/lombok-1.18.22.jar",
     ],
 )
-
-bazel_dep(name = "rules_scala", version = "7.0.0")
-single_version_override(
-    module_name = "rules_scala",
-    patch_strip = 1,
-    # https://github.com/bazel-contrib/rules_scala/pull/1740
-    patches = ["@//:rules_scala.patch"],
-)
-
-scala_config = use_extension(
-    "@rules_scala//scala/extensions:config.bzl",
-    "scala_config",
-    dev_dependency = True,
-)
-scala_config.settings(scala_version = "2.13.16")
-
-scala_deps = use_extension(
-    "@rules_scala//scala/extensions:deps.bzl",
-    "scala_deps",
-    dev_dependency = True,
-)
-scala_deps.scala()
