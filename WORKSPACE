@@ -665,7 +665,7 @@ maven_install(
 maven_install(
     name = "version_interval_testing",
     artifacts = [
-        "io.grpc:grpc-netty-shaded:1.29.0",
+        "io.grpc:grpc-netty-shaded:1.75.0",
     ],
     repositories = [
         "https://repo1.maven.org/maven2",
