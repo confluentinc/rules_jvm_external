@@ -905,7 +905,7 @@ http_archive(
     name = "protobuf",
     sha256 = "e07046fbac432b05adc1fd1318c6f19ab1b0ec0655f7f4e74627d9713959a135",
     strip_prefix = "protobuf-21.7",
-    url = "https://github.com/protocolbuffers/protobuf/releases/download/v21.7/protobuf-all-21.7.tar.gz",
+    url = "https://github.com/protocolbuffers/protobuf/releases/download/v33.0/protobuf-all-21.7.tar.gz",
 )
 
 maven_install(
