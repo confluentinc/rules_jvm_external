@@ -29,7 +29,7 @@ def _maven_bom_impl(ctx):
     dep_coordinates = [f.coordinates for f in fragments]
 
     # Expand maven coordinates for any variables to be replaced.
-    coordinates = ctx.expand_make_variables("coordinates", ctx.attr.maven_coordinates, {})
+    coordinates = ctx.expand_make_variables("coordinates", ctx.attr.maven_coordinates, ctx.var)
 
     bom = generate_pom(
         ctx,
@@ -73,10 +73,14 @@ def _maven_dependencies_bom_impl(ctx):
     all_deps = depset(transitive = [f.maven_info.maven_deps for f in fragments]).to_list()
     combined_deps = [a for a in all_deps if a not in first_order_deps]
 
-    unpacked = unpack_coordinates(ctx.attr.bom_coordinates)
+    # Expand coordinates for any variables to be replaced.
+    bom_coordinates = ctx.expand_make_variables("bom_coordinates", ctx.attr.bom_coordinates, ctx.var)
+    coordinates = ctx.expand_make_variables("coordinates", ctx.attr.maven_coordinates, ctx.var)
+
+    unpacked = unpack_coordinates(bom_coordinates)
     dependencies_bom = generate_pom(
         ctx,
-        coordinates = ctx.attr.maven_coordinates,
+        coordinates = coordinates,
         is_bom = True,
         versioned_dep_coordinates = combined_deps + ["%s:%s:%s@pom" % (unpacked.group, unpacked.artifact, unpacked.version)],
         pom_template = ctx.file.pom_template,

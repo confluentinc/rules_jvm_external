@@ -91,8 +91,9 @@ string_flag(
 
 maven_bom(
     name = "substitution-bom",
-    java_exports = [],
+    java_exports = [":one-dep"],
     maven_coordinates = "com.example:bom-substitution:$(VERSION)",
+    dependencies_maven_coordinates = "com.example:bom-substitution-deps:$(VERSION)",
     toolchains = [":version"],
 )
 
@@ -100,4 +101,10 @@ diff_test(
     name = "validate-substitution-bom",
     file1 = ":substitution-bom",
     file2 = "substitution-bom.golden.xml",
+)
+
+diff_test(
+    name = "validate-substitution-dependencies-bom",
+    file1 = ":substitution-bom-dependencies",
+    file2 = "substitution-bom-dependencies.golden.xml",
 )
