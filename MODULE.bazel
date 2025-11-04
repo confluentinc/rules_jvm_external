@@ -1,57 +1,21 @@
 module(
     name = "rules_jvm_external",
-    version = "6.8",
+    version = "6.9",
     bazel_compatibility = [">=7.0.0"],
 )
 
-bazel_dep(
-    name = "rules_android",
-    version = "0.1.1",
-)
-bazel_dep(
-    name = "bazel_features",
-    version = "1.19.0",
-)
-bazel_dep(
-    name = "bazel_skylib",
-    version = "1.7.1",
-)
-bazel_dep(
-    name = "package_metadata",
-    version = "0.0.3",
-)
-bazel_dep(
-    name = "platforms",
-    version = "0.0.10",
-)
-bazel_dep(
-    name = "rules_license",
-    version = "1.0.0",
-)
-bazel_dep(
-    name = "rules_java",
-    version = "7.12.2",
-)
-bazel_dep(
-    name = "rules_kotlin",
-    version = "1.9.6",
-)
-bazel_dep(
-    name = "rules_shell",
-    version = "0.3.0",
-)
+bazel_dep(name = "rules_android", version = "0.1.1")
+bazel_dep(name = "bazel_features", version = "1.19.0")
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "package_metadata", version = "0.0.3")
+bazel_dep(name = "platforms", version = "0.0.10")
+bazel_dep(name = "rules_license", version = "1.0.0")
+bazel_dep(name = "rules_java", version = "7.12.2")
+bazel_dep(name = "rules_kotlin", version = "1.9.6")
+bazel_dep(name = "rules_shell", version = "0.3.0")
 
-bazel_dep(
-    name = "aspect_bazel_lib",
-    version = "2.20.0",
-    dev_dependency = True,
-)
-bazel_dep(
-    name = "stardoc",
-    version = "0.7.0",
-    dev_dependency = True,
-    repo_name = "io_bazel_stardoc",
-)
+bazel_dep(name = "aspect_bazel_lib", version = "2.20.0", dev_dependency = True)
+bazel_dep(name = "stardoc", version = "0.7.0", dev_dependency = True, repo_name = "io_bazel_stardoc")
 
 # Remove this once rules_android has rolled out official Bzlmod support
 remote_android_extensions = use_extension("@bazel_tools//tools/android:android_extensions.bzl", "remote_android_tools_extensions")
@@ -668,6 +632,8 @@ dev_maven.install(
         "com.github.spotbugs:spotbugs:4.7.0",
         # https://github.com/bazelbuild/rules_jvm_external/issues/1267
         "org.mockito:mockito-core:3.3.3@pom",
+        # https://github.com/bazel-contrib/rules_jvm_external/issues/1461
+        "com.almworks.sqlite4java:libsqlite4java-linux-i386:1.0.392",
     ],
     generate_compat_repositories = True,
     lock_file = "//tests/custom_maven_install:regression_testing_coursier_install.json",
@@ -737,6 +703,8 @@ dev_maven.install(
         "io.opentelemetry:opentelemetry-sdk",
         # https://github.com/bazel-contrib/rules_jvm_external/issues/132
         "com.amazonaws:DynamoDBLocal:1.25.0",
+        # https://github.com/bazel-contrib/rules_jvm_external/issues/1461
+        "com.almworks.sqlite4java:libsqlite4java-linux-i386:1.0.392",
     ],
     boms = [
         "io.opentelemetry:opentelemetry-bom:1.31.0",
@@ -767,6 +735,10 @@ dev_maven.install(
         "androidx.annotation:annotation:1.6.0",
         # https://github.com/bazel-contrib/rules_jvm_external/issues/1409
         "com.squareup.okhttp3:okhttp:4.12.0",
+        # https://github.com/bazel-contrib/rules_jvm_external/issues/1461
+        "com.almworks.sqlite4java:libsqlite4java-linux-i386:1.0.392",
+        # https://github.com/bazel-contrib/rules_jvm_external/issues/1471
+        "androidx.fragment:fragment-ktx:1.6.1",
     ],
     generate_compat_repositories = True,
     lock_file = "//tests/custom_maven_install:regression_testing_gradle_install.json",

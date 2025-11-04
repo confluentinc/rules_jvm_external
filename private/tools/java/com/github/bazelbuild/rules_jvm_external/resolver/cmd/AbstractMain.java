@@ -28,6 +28,7 @@ import com.github.bazelbuild.rules_jvm_external.resolver.Resolver;
 import com.github.bazelbuild.rules_jvm_external.resolver.events.EventListener;
 import com.github.bazelbuild.rules_jvm_external.resolver.events.PhaseEvent;
 import com.github.bazelbuild.rules_jvm_external.resolver.lockfile.V2LockFile;
+import com.github.bazelbuild.rules_jvm_external.resolver.netrc.Netrc;
 import com.github.bazelbuild.rules_jvm_external.resolver.remote.DownloadResult;
 import com.github.bazelbuild.rules_jvm_external.resolver.remote.Downloader;
 import com.github.bazelbuild.rules_jvm_external.resolver.remote.HttpDownloader;
@@ -56,20 +57,20 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
-public class Main {
+public abstract class AbstractMain {
 
-  public static void main(String[] args) throws IOException {
+  public void doMain(String[] args) {
     Set<DependencyInfo> infos;
     try (EventListener listener = HttpDownloader.defaultEventListener()) {
       ResolverConfig config = new ResolverConfig(listener, args);
 
       ResolutionRequest request = config.getResolutionRequest();
 
-      Resolver resolver = config.getResolver();
+      Resolver resolver = getResolver(config.getNetrc(), config.getMaxThreads(), listener);
 
       ResolutionResult resolutionResult = resolver.resolve(request);
 
-      infos = fulfillDependencyInfos(listener, config, resolutionResult.getResolution());
+      infos = fulfillDependencyInfos(resolver, listener, config, resolutionResult.getResolution());
 
       writeLockFile(listener, config, request, infos, resolutionResult.getConflicts());
 
@@ -80,8 +81,13 @@ public class Main {
     }
   }
 
+  public abstract Resolver getResolver(Netrc netrc, int maxThreads, EventListener listener);
+
   private static Set<DependencyInfo> fulfillDependencyInfos(
-      EventListener listener, ResolverConfig config, Graph<Coordinates> resolved) {
+      Resolver resolver,
+      EventListener listener,
+      ResolverConfig config,
+      Graph<Coordinates> resolved) {
     listener.onEvent(new PhaseEvent("Downloading dependencies"));
 
     ResolutionRequest request = config.getResolutionRequest();
@@ -94,7 +100,7 @@ public class Main {
     Downloader downloader =
         new Downloader(
             config.getNetrc(),
-            request.getLocalCache(config.getResolver().getName()),
+            request.getLocalCache(resolver.getName()),
             request.getRepositories(),
             listener,
             cacheResults);
@@ -283,9 +289,39 @@ public class Main {
 
     Set<String> keys = new TreeSet<>(Set.of("artifacts", "dependencies", "repositories"));
     for (String key : keys) {
-      toHash.put(key, rendered.get(key));
+      Object value = rendered.get(key);
+      // Sort nested structures the same way Starlark does with json.decode(json.encode(value))
+      // to ensure consistent hashing between Java and Starlark
+      if (value instanceof Map) {
+        value = sortMapRecursively((Map<?, ?>) value);
+      }
+      toHash.put(key, value);
     }
 
     return new StarlarkRepr().repr(toHash).hashCode();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> sortMapRecursively(Map<?, ?> map) {
+    TreeMap<String, Object> sorted = new TreeMap<>();
+    for (Map.Entry<?, ?> entry : map.entrySet()) {
+      Object value = entry.getValue();
+      if (value instanceof Map) {
+        value = sortMapRecursively((Map<?, ?>) value);
+      } else if (value instanceof List) {
+        List<?> list = (List<?>) value;
+        List<Object> sortedList = new java.util.ArrayList<>();
+        for (Object item : list) {
+          if (item instanceof Map) {
+            sortedList.add(sortMapRecursively((Map<?, ?>) item));
+          } else {
+            sortedList.add(item);
+          }
+        }
+        value = sortedList;
+      }
+      sorted.put(String.valueOf(entry.getKey()), value);
+    }
+    return sorted;
   }
 }

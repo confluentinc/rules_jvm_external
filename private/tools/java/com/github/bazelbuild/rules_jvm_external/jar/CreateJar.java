@@ -1,4 +1,4 @@
-package com.github.bazelbuild.rules_jvm_external.javadoc;
+package com.github.bazelbuild.rules_jvm_external.jar;
 
 import com.github.bazelbuild.rules_jvm_external.zip.StableZipEntry;
 import java.io.IOException;
