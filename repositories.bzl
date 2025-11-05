@@ -34,9 +34,9 @@ def rules_jvm_external_deps(
             http_archive,
             name = "rules_java",
             urls = [
-                "https://github.com/bazelbuild/rules_java/releases/download/5.5.1/rules_java-5.5.1.tar.gz",
+                "https://github.com/bazelbuild/rules_java/releases/download/9.0.2/rules_java-9.0.2.tar.gz",
             ],
-            sha256 = "73b88f34dc251bce7bc6c472eb386a6c2b312ed5b473c81fe46855c248f792e0",
+            sha256 = "baf2e93c8190d05e08231fc4b76084f7d85c5d4dc75aa1d2919a3bc4107662cc",
         )
 
     else:
@@ -44,9 +44,9 @@ def rules_jvm_external_deps(
             http_archive,
             name = "rules_java",
             urls = [
-                "https://github.com/bazelbuild/rules_java/releases/download/7.12.2/rules_java-7.12.2.tar.gz",
+                "https://github.com/bazelbuild/rules_java/releases/download/9.0.2/rules_java-9.0.2.tar.gz",
             ],
-            sha256 = "a9690bc00c538246880d5c83c233e4deb83fe885f54c21bb445eb8116a180b83",
+            sha256 = "baf2e93c8190d05e08231fc4b76084f7d85c5d4dc75aa1d2919a3bc4107662cc",
         )
 
     if major_version == "6":
