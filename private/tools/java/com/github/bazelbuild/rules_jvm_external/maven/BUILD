@@ -22,6 +22,10 @@ java_library(
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/remote",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/ui",
         artifact(
+            "commons-logging:commons-logging",
+            repository_name = "rules_jvm_external_deps",
+        ),
+        artifact(
             "com.google.code.findbugs:jsr305",
             repository_name = "rules_jvm_external_deps",
         ),
