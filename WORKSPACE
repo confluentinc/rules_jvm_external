@@ -128,7 +128,7 @@ load("//:specs.bzl", "maven")
 
 maven_install(
     artifacts = [
-        "com.google.guava:guava:31.1-jre",
+        "com.google.guava:guava:32.0.0-android",
         "org.hamcrest:hamcrest-core:2.1",
         "io.netty:netty-tcnative-boringssl-static:2.0.61.Final",
     ],
@@ -156,7 +156,7 @@ maven_install(
                 "com.google.j2objc:j2objc-annotations",
             ],
             group = "com.google.guava",
-            version = "27.0-jre",
+            version = "32.0.0-android",
         ),
     ],
     repositories = [
@@ -167,7 +167,7 @@ maven_install(
 maven_install(
     name = "global_exclusion_testing",
     artifacts = [
-        "com.google.guava:guava:27.0-jre",  # depends on animal-sniffer-annotations and j2objc-annotations
+        "com.google.guava:guava:32.0.0-android",  # depends on animal-sniffer-annotations and j2objc-annotations
         "com.squareup.okhttp3:okhttp:3.14.1",  # depends on animal-sniffer-annotations
         "com.diffplug.durian:durian-core:1.2.0",  # depends on animal-sniffer-annotations and j2objc-annotations
     ],
@@ -186,7 +186,7 @@ maven_install(
 maven_install(
     name = "manifest_stamp_testing",
     artifacts = [
-        "com.google.guava:guava:27.0-jre",
+        "com.google.guava:guava:32.0.0-android",
         "javax.inject:javax.inject:1",
         "org.apache.beam:beam-sdks-java-core:2.15.0",
         "org.bouncycastle:bcprov-jdk15on:1.64",
@@ -425,7 +425,7 @@ maven_install(
         maven.artifact(
             artifact = "guava",
             group = "com.google.guava",
-            version = "27.0-jre",
+            version = "32.0.0-android",
         ),
         maven.artifact(
             testonly = True,
@@ -444,7 +444,7 @@ maven_install(
     artifacts = [
         # https://github.com/bazelbuild/rules_jvm_external/issues/107
         "com.google.cloud:google-cloud-storage:1.66.0",
-        "com.google.guava:guava:25.0-android",
+        "com.google.guava:guava:32.0.0-android",
     ],
     maven_install_json = "//tests/custom_maven_install:policy_pinned_testing_install.json",
     repositories = [
@@ -499,7 +499,7 @@ compat_repositories()
 
 maven_install(
     name = "maven_install_in_custom_location",
-    artifacts = ["com.google.guava:guava:27.0-jre"],
+    artifacts = ["com.google.guava:guava:32.0.0-android"],
     maven_install_json = "@rules_jvm_external//tests/custom_maven_install:maven_install.json",
     repositories = ["https://repo1.maven.org/maven2"],
 )
@@ -975,7 +975,7 @@ maven_install(
             artifact = "guava",
             force_version = True,
             group = "com.google.guava",
-            version = "23.3-jre",
+            version = "32.0.0-android",
         ),
         # And something that depends on a more recent version of guava
         "xyz.rogfam:littleproxy:2.1.0",
@@ -1105,7 +1105,7 @@ maven_install(
                 ),
             ],
             group = "com.google.guava",
-            version = "31.1-jre",
+            version = "32.0.0-android",
         ),
     ],
     excluded_artifacts = [
