@@ -25,8 +25,8 @@ rules_jvm_external_setup()
 
 http_archive(
     name = "rules_kotlin",
-    sha256 = "5766f1e599acf551aa56f49dab9ab9108269b03c557496c54acaf41f98e2b8d6",
-    url = "https://github.com/bazelbuild/rules_kotlin/releases/download/v1.9.0/rules_kotlin-v1.9.0.tar.gz",
+    sha256 = "3b772976fec7bdcda1d84b9d39b176589424c047eb2175bed09aac630e50af43",
+    url = "https://github.com/bazelbuild/rules_kotlin/releases/download/v1.9.6/rules_kotlin-v1.9.6.tar.gz",
 )
 
 load("@rules_kotlin//kotlin:repositories.bzl", "kotlin_repositories")
@@ -39,10 +39,10 @@ kt_register_toolchains()
 
 http_archive(
     name = "io_bazel_stardoc",
-    sha256 = "3fd8fec4ddec3c670bd810904e2e33170bedfe12f90adf943508184be458c8bb",
+    sha256 = "ca933f39f2a6e0ad392fa91fd662545afcbd36c05c62365538385d35a0323096",
     urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/stardoc/releases/download/0.5.3/stardoc-0.5.3.tar.gz",
-        "https://github.com/bazelbuild/stardoc/releases/download/0.5.3/stardoc-0.5.3.tar.gz",
+        "https://mirror.bazel.build/github.com/bazelbuild/stardoc/releases/download/0.8.0/stardoc-0.8.0.tar.gz",
+        "https://github.com/bazelbuild/stardoc/releases/download/0.8.0/stardoc-0.8.0.tar.gz",
     ],
 )
 
@@ -52,9 +52,9 @@ stardoc_repositories()
 
 http_archive(
     name = "rules_testing",
-    sha256 = "02c62574631876a4e3b02a1820cb51167bb9cdcdea2381b2fa9d9b8b11c407c4",
-    strip_prefix = "rules_testing-0.6.0",
-    url = "https://github.com/bazelbuild/rules_testing/releases/download/v0.6.0/rules_testing-v0.6.0.tar.gz",
+    sha256 = "89feaf18d6e2fc07ed7e34510058fc8d48e45e6d2ff8a817a718e8c8e4bcda0e",
+    strip_prefix = "rules_testing-0.8.0",
+    url = "https://github.com/bazelbuild/rules_testing/releases/download/v0.8.0/rules_testing-v0.8.0.tar.gz",
 )
 
 http_archive(
@@ -642,9 +642,9 @@ maven_install(
 # use_starlark_android_rules = True
 http_archive(
     name = "build_bazel_rules_android",
-    sha256 = "cd06d15dd8bb59926e4d65f9003bfc20f9da4b2519985c27e190cddc8b7a7806",
-    strip_prefix = "rules_android-0.1.1",
-    urls = ["https://github.com/bazelbuild/rules_android/archive/v0.1.1.zip"],
+    sha256 = "443583b66af01b5208afbac775623bff7d7ab0bd7293a8b8f79455f7701b21a9",
+    strip_prefix = "rules_android-0.6.4",
+    urls = ["https://github.com/bazelbuild/rules_android/archive/v0.6.4.zip"],
 )
 
 # https://github.com/bazelbuild/rules_jvm_external/issues/351
@@ -893,9 +893,9 @@ rbe_preconfig(
 
 http_archive(
     name = "com_google_protobuf",
-    sha256 = "e07046fbac432b05adc1fd1318c6f19ab1b0ec0655f7f4e74627d9713959a135",
-    strip_prefix = "protobuf-21.7",
-    url = "https://github.com/protocolbuffers/protobuf/releases/download/v21.7/protobuf-all-21.7.tar.gz",
+    sha256 = "2c6a36c7b5a55accae063667ef3c55f2642e67476d96d355ff0acb13dbb47f09",
+    strip_prefix = "protobuf-21.12",
+    url = "https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protobuf-all-21.12.tar.gz",
 )
 
 load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
@@ -905,9 +905,9 @@ protobuf_deps()
 # When using `bzlmod` this gets pulled in as `protobuf`
 http_archive(
     name = "protobuf",
-    sha256 = "e07046fbac432b05adc1fd1318c6f19ab1b0ec0655f7f4e74627d9713959a135",
-    strip_prefix = "protobuf-21.7",
-    url = "https://github.com/protocolbuffers/protobuf/releases/download/v21.7/protobuf-all-21.7.tar.gz",
+    sha256 = "2c6a36c7b5a55accae063667ef3c55f2642e67476d96d355ff0acb13dbb47f09",
+    strip_prefix = "protobuf-21.12",
+    url = "https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protobuf-all-21.12.tar.gz",
 )
 
 maven_install(
