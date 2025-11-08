@@ -465,7 +465,7 @@ maven_install(
     name = "strict_visibility_testing",
     artifacts = [
         # https://github.com/bazelbuild/rules_jvm_external/issues/94
-        "org.apache.tomcat:tomcat-catalina:9.0.24",
+        "org.apache.tomcat:tomcat-catalina:9.0.105",
         # https://github.com/bazelbuild/rules_jvm_external/issues/255
         maven.artifact(
             artifact = "jetty-http",
