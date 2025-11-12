@@ -47,7 +47,8 @@ def _genrule_copy_artifact_from_http_file(artifact, visibilities):
         # to see this failing
         "     allow_symlink = %s," % ("False" if file.endswith(".exe") else "True"),
     ]
-    if get_packaging(artifact["coordinates"]) == "exe":
+    packaging = get_packaging(artifact["coordinates"])
+    if packaging == "exe":
         genrule.append("     is_executable = True,")
     genrule.extend([
         "     visibility = [%s]" % (",".join(["\"%s\"" % v for v in visibilities])),
@@ -85,6 +86,23 @@ def _get_maven_url(artifact_urls):
     # Return anything
     return artifact_urls[0]
 
+def _extract_extension(artifact_path):
+    """Extract the file extension from an artifact path, handling multi-part extensions.
+
+    Args:
+        artifact_path: The file path of the artifact (e.g., "example-1.19.3.tar.gz")
+
+    Returns:
+        The extension as a string (e.g., "tar.gz", "jar", "aar")
+    """
+
+    # Handle multi-part extensions like .tar.gz
+    if artifact_path.endswith(".tar.gz"):
+        return "tar.gz"
+
+    # For simple extensions, split and take the last part
+    return artifact_path.split(".").pop()
+
 def _generate_target(
         repository_ctx,
         jar_versionless_target_labels,
@@ -106,7 +124,7 @@ def _generate_target(
     #
     # (jvm|aar)_import(
     #
-    packaging = artifact_path.split(".").pop()
+    packaging = _extract_extension(artifact_path)
     if packaging == "jar":
         # Regular `java_import` invokes ijar on all JARs, causing some Scala and
         # Kotlin compile interface JARs to be incorrect. We replace java_import
@@ -494,7 +512,7 @@ def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlin
             all_imports.append(
                 "filegroup(\n\tname = \"%s\",\n\tsrcs = [\"%s\"],\n\ttags = [\"javadoc\"],\n\tvisibility = %s,\n)" % (target_label, artifact_path, visibility),
             )
-        elif packaging in ("exe", "json"):
+        elif packaging in ("exe", "json", "tar.gz"):
             seen_imports[target_label] = True
             versioned_target_alias_label = "%s_extension" % to_repository_name(artifact["coordinates"])
             all_imports.append(
