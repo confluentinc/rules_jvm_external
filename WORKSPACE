@@ -129,7 +129,7 @@ load("//:specs.bzl", "maven")
 maven_install(
     artifacts = [
         "com.google.guava:guava:31.1-jre",
-        "org.hamcrest:hamcrest-core:2.1",
+        "org.hamcrest:hamcrest-core:3.0",
         "io.netty:netty-tcnative-boringssl-static:2.0.61.Final",
     ],
     maven_install_json = "@rules_jvm_external//:maven_install.json",
@@ -1086,7 +1086,7 @@ maven_install(
 maven_install(
     name = "from_files",
     artifacts = [
-        "org.junit.jupiter:junit-jupiter-api:5.12.2",
+        "org.junit.jupiter:junit-jupiter-api:6.0.1",
     ],
     repositories = [
         "https://repo1.maven.org/maven2",
