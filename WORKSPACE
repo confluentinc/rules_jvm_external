@@ -929,7 +929,7 @@ maven_install(
     name = "override_target_in_deps",
     artifacts = [
         "io.opentelemetry:opentelemetry-sdk:1.28.0",
-        "org.slf4j:slf4j-log4j12:1.7.36",
+        "org.slf4j:slf4j-log4j12:2.0.17",
         "redis.clients:jedis:5.0.2",
     ],
     maven_install_json = "@rules_jvm_external//tests/custom_maven_install:override_target_in_deps_install.json",
@@ -951,7 +951,7 @@ _override_target_in_deps_maven_install()
 maven_install(
     name = "same_override_target",
     artifacts = [
-        "org.slf4j:slf4j-log4j12:1.7.36",
+        "org.slf4j:slf4j-log4j12:2.0.17",
     ],
     maven_install_json = "@rules_jvm_external//tests/custom_maven_install:same_override_target_install.json",
     override_targets = {
