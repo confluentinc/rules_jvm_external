@@ -1058,7 +1058,7 @@ maven_install(
     # an arbitrary artifact which depends on org.javamoney:moneta:pom
     artifacts = [
         # https://github.com/quarkiverse/quarkus-moneta/blob/2.0.0/runtime/pom.xml#L16-L21
-        "io.quarkiverse.moneta:quarkus-moneta:2.0.0",
+        "io.quarkiverse.moneta:quarkus-moneta:5.0.0",
     ],
     repositories = [
         "https://repo1.maven.org/maven2",
