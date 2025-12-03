@@ -13,6 +13,7 @@ SUPPORTED_PACKAGING_TYPES = [
     "pom",
     "scala-jar",
     "so",
+    "tar.gz",
     "test-jar",
 ]
 

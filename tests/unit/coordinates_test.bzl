@@ -136,6 +136,36 @@ def _unusual_version_format_impl(ctx):
 
 unusual_version_format_test = unittest.make(_unusual_version_format_impl)
 
+def _tar_gz_packaging_impl(ctx):
+    env = unittest.begin(ctx)
+
+    unpacked = unpack_coordinates("io.example:example:1.19.3@tar.gz")
+    asserts.equals(env, "io.example", unpacked.group)
+    asserts.equals(env, "example", unpacked.artifact)
+    asserts.equals(env, "1.19.3", unpacked.version)
+    asserts.equals(env, "tar.gz", unpacked.packaging)
+    asserts.equals(env, None, unpacked.classifier)
+
+    # Test original format with tar.gz
+    unpacked = unpack_coordinates("group:artifact:tar.gz:1.2.3")
+    asserts.equals(env, "group", unpacked.group)
+    asserts.equals(env, "artifact", unpacked.artifact)
+    asserts.equals(env, "1.2.3", unpacked.version)
+    asserts.equals(env, "tar.gz", unpacked.packaging)
+    asserts.equals(env, None, unpacked.classifier)
+
+    # Test full 5-part format with tar.gz and classifier
+    unpacked = unpack_coordinates("group:artifact:tar.gz:linux-x64:1.2.3")
+    asserts.equals(env, "group", unpacked.group)
+    asserts.equals(env, "artifact", unpacked.artifact)
+    asserts.equals(env, "1.2.3", unpacked.version)
+    asserts.equals(env, "tar.gz", unpacked.packaging)
+    asserts.equals(env, "linux-x64", unpacked.classifier)
+
+    return unittest.end(env)
+
+tar_gz_packaging_test = unittest.make(_tar_gz_packaging_impl)
+
 def coordinates_test_suite():
     unittest.suite(
         "coordinates_tests",
@@ -148,4 +178,5 @@ def coordinates_test_suite():
         gradle_format_with_type_but_no_classifier_test,
         multiple_formats_test,
         unusual_version_format_test,
+        tar_gz_packaging_test,
     )
