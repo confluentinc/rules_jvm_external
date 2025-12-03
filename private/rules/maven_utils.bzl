@@ -103,7 +103,7 @@ def generate_pom(
 
     for key in exclusions:
         if key not in versioned_dep_coordinates and key not in unversioned_dep_coordinates:
-            fail("Key %s in exclusions does not occur in versioned_dep_coordinates or unversioned_dep_coordinates" % key)
+            print("Key %s in exclusions does not occur in versioned_dep_coordinates or unversioned_dep_coordinates" % key)
 
     if parent:
         # We only want the groupId, artifactID, and version

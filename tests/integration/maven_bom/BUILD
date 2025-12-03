@@ -108,3 +108,79 @@ diff_test(
     file1 = ":substitution-bom-dependencies",
     file2 = "substitution-bom-dependencies.golden.xml",
 )
+
+# Test that exclusions from maven artifacts are included in the dependencies BOM
+java_export(
+    name = "with-exclusion-dep",
+    srcs = ["OneDep.java"],
+    maven_coordinates = "com.example:with-exclusion:1.0.0",
+    deps = [
+        # This artifact has an exclusion for com.google.errorprone:error_prone_annotations
+        # defined in MODULE.bazel via dev_maven.artifact
+        "@pom_exclusion_testing_coursier//:com_google_guava_guava",
+    ],
+)
+
+maven_bom(
+    name = "exclusion-bom",
+    dependencies_maven_coordinates = "com.example:exclusion-bom-deps:1.0.0",
+    java_exports = [
+        ":with-exclusion-dep",
+    ],
+    maven_coordinates = "com.example:exclusion-bom:1.0.0",
+)
+
+diff_test(
+    name = "validate-exclusion-bom",
+    file1 = ":exclusion-bom",
+    file2 = "exclusion-bom.golden.xml",
+)
+
+diff_test(
+    name = "validate-exclusion-dependencies-bom",
+    file1 = ":exclusion-bom-dependencies",
+    file2 = "exclusion-bom-dependencies.golden.xml",
+)
+
+# Test that $(VERSION) substitution works in transitive java_export coordinates
+java_export(
+    name = "versioned-lib",
+    srcs = ["OneDep.java"],
+    maven_coordinates = "com.example:versioned-lib:$(VERSION)",
+    toolchains = [":version"],
+    deps = [
+        artifact("com.google.guava:guava"),
+    ],
+)
+
+java_export(
+    name = "depends-on-versioned",
+    srcs = ["TwoDeps.java"],
+    maven_coordinates = "com.example:depends-on-versioned:1.0.0",
+    toolchains = [":version"],
+    deps = [
+        ":versioned-lib",
+    ],
+)
+
+maven_bom(
+    name = "versioned-transitive-bom",
+    dependencies_maven_coordinates = "com.example:versioned-transitive-deps:$(VERSION)",
+    java_exports = [
+        ":depends-on-versioned",
+    ],
+    maven_coordinates = "com.example:versioned-transitive-bom:$(VERSION)",
+    toolchains = [":version"],
+)
+
+diff_test(
+    name = "validate-versioned-transitive-bom",
+    file1 = ":versioned-transitive-bom",
+    file2 = "versioned-transitive-bom.golden.xml",
+)
+
+diff_test(
+    name = "validate-versioned-transitive-dependencies-bom",
+    file1 = ":versioned-transitive-bom-dependencies",
+    file2 = "versioned-transitive-bom-dependencies.golden.xml",
+)

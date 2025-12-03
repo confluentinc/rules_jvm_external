@@ -26,10 +26,10 @@ def _label(label_or_string):
 
 def _maven_bom_impl(ctx):
     fragments = [f[MavenBomFragmentInfo] for f in ctx.attr.fragments]
-    dep_coordinates = [f.coordinates for f in fragments]
 
     # Expand maven coordinates for any variables to be replaced.
     coordinates = ctx.expand_make_variables("coordinates", ctx.attr.maven_coordinates, ctx.var)
+    dep_coordinates = [ctx.expand_make_variables("dep", f.coordinates, ctx.var) for f in fragments]
 
     bom = generate_pom(
         ctx,
@@ -67,15 +67,32 @@ _maven_bom = rule(
 def _maven_dependencies_bom_impl(ctx):
     fragments = [f[MavenBomFragmentInfo] for f in ctx.attr.fragments]
 
-    # We want to include all the dependencies that aren't
-    # included in the main BOM
-    first_order_deps = [f[MavenBomFragmentInfo].coordinates for f in ctx.attr.fragments]
-    all_deps = depset(transitive = [f.maven_info.maven_deps for f in fragments]).to_list()
-    combined_deps = [a for a in all_deps if a not in first_order_deps]
-
     # Expand coordinates for any variables to be replaced.
     bom_coordinates = ctx.expand_make_variables("bom_coordinates", ctx.attr.bom_coordinates, ctx.var)
     coordinates = ctx.expand_make_variables("coordinates", ctx.attr.maven_coordinates, ctx.var)
+
+    # We want to include all the dependencies that aren't
+    # included in the main BOM. Expand make variables on the coordinates.
+    first_order_deps = [ctx.expand_make_variables("dep", f[MavenBomFragmentInfo].coordinates, ctx.var) for f in ctx.attr.fragments]
+    all_deps = [ctx.expand_make_variables("dep", a, ctx.var) for a in depset(transitive = [f.maven_info.maven_deps for f in fragments]).to_list()]
+    combined_deps = [a for a in all_deps if a not in first_order_deps]
+
+    # Collect exclusions from all MavenInfo instances in the fragments' transitive dependencies.
+    # Exclusions come from maven_exclusion= tags on maven dependencies.
+    exclusions_unsorted = {}
+    for fragment in fragments:
+        for maven_info in fragment.maven_info.all_infos.to_list():
+            if maven_info.coordinates and maven_info.exclusions:
+                expanded_coords = ctx.expand_make_variables("exclusion_coords", maven_info.coordinates, ctx.var)
+                if expanded_coords not in exclusions_unsorted:
+                    exclusions_unsorted[expanded_coords] = []
+                for exclusion in maven_info.exclusions:
+                    if exclusion not in exclusions_unsorted[expanded_coords]:
+                        exclusions_unsorted[expanded_coords].append(exclusion)
+
+    exclusions = {}
+    for coords in exclusions_unsorted:
+        exclusions[coords] = sorted(exclusions_unsorted[coords])
 
     unpacked = unpack_coordinates(bom_coordinates)
     dependencies_bom = generate_pom(
@@ -86,6 +103,7 @@ def _maven_dependencies_bom_impl(ctx):
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
         indent = 12,
+        exclusions = exclusions,
     )
 
     return [
