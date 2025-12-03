@@ -9,6 +9,7 @@ MavenBomFragmentInfo = provider(
         "javadocs": "The javadocs of the artifact. May be `None`",
         "pom": "The `pom.xml` template file",
         "maven_info": "The `MavenInfo` of `artifact`",
+        "exclusions": "Dict mapping maven coordinates to lists of exclusions (group:artifact format)",
     },
 )
 
@@ -31,6 +32,18 @@ def _maven_bom_fragment_impl(ctx):
     else:
         artifact_jar = None
 
+    # Process exclusions: convert label-keyed dict to coordinates-keyed dict
+    exclusions = {}
+    for target, target_exclusions in ctx.attr.exclusions.items():
+        if MavenInfo in target and target[MavenInfo].coordinates:
+            coords = ctx.expand_make_variables("exclusions", target[MavenInfo].coordinates, ctx.var)
+            # Decode the JSON string of exclusions
+            exclusion_list = json.decode(target_exclusions)
+            # Convert exclusion dicts to "group:artifact" strings
+            exclusions[coords] = ["%s:%s" % (e["group"], e["artifact"]) for e in exclusion_list]
+        else:
+            print("Warning: exclusions key %s not found in dependencies or has no maven coordinates" % target.label)
+
     return [
         MavenBomFragmentInfo(
             coordinates = coordinates,
@@ -39,6 +52,7 @@ def _maven_bom_fragment_impl(ctx):
             javadocs = ctx.file.javadoc_artifact,
             pom = ctx.file.pom,
             maven_info = ctx.attr.artifact[MavenInfo],
+            exclusions = exclusions,
         ),
     ]
 
@@ -71,6 +85,13 @@ maven_bom_fragment = rule(
         "pom": attr.label(
             doc = "The pom file of the generated `artifact`",
             allow_single_file = True,
+        ),
+        "exclusions": attr.label_keyed_string_dict(
+            doc = """Mapping of dependency labels to exclusions (as JSON-encoded list of {group, artifact} dicts)""",
+            allow_empty = True,
+            aspects = [
+                has_maven_deps,
+            ],
         ),
     },
     provides = [

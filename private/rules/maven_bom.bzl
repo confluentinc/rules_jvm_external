@@ -77,10 +77,13 @@ def _maven_dependencies_bom_impl(ctx):
     all_deps = [ctx.expand_make_variables("dep", a, ctx.var) for a in depset(transitive = [f.maven_info.maven_deps for f in fragments]).to_list()]
     combined_deps = [a for a in all_deps if a not in first_order_deps]
 
-    # Collect exclusions from all MavenInfo instances in the fragments' transitive dependencies.
-    # Exclusions come from maven_exclusion= tags on maven dependencies.
+    # Collect exclusions from two sources:
+    # 1. MavenInfo.exclusions - from maven_exclusion= tags on maven dependencies
+    # 2. Fragment.exclusions - from java_export's exclusions attribute
     exclusions_unsorted = {}
+
     for fragment in fragments:
+        # Source 1: maven_exclusion= tags from transitive maven dependencies
         for maven_info in fragment.maven_info.all_infos.to_list():
             if maven_info.coordinates and maven_info.exclusions:
                 expanded_coords = ctx.expand_make_variables("exclusion_coords", maven_info.coordinates, ctx.var)
@@ -89,6 +92,15 @@ def _maven_dependencies_bom_impl(ctx):
                 for exclusion in maven_info.exclusions:
                     if exclusion not in exclusions_unsorted[expanded_coords]:
                         exclusions_unsorted[expanded_coords].append(exclusion)
+
+        # Source 2: exclusions from java_export's exclusions attribute
+        for coords, exclusion_list in fragment.exclusions.items():
+            expanded_coords = ctx.expand_make_variables("fragment_exclusion_coords", coords, ctx.var)
+            if expanded_coords not in exclusions_unsorted:
+                exclusions_unsorted[expanded_coords] = []
+            for exclusion in exclusion_list:
+                if exclusion not in exclusions_unsorted[expanded_coords]:
+                    exclusions_unsorted[expanded_coords].append(exclusion)
 
     exclusions = {}
     for coords in exclusions_unsorted:

@@ -184,3 +184,41 @@ diff_test(
     file1 = ":versioned-transitive-bom-dependencies",
     file2 = "versioned-transitive-bom-dependencies.golden.xml",
 )
+
+# Test that exclusions set via java_export's exclusions attribute propagate to the BOM
+# (as opposed to exclusions from maven_exclusion= tags on maven artifacts)
+java_export(
+    name = "with-java-export-exclusion",
+    srcs = ["OneDep.java"],
+    maven_coordinates = "com.example:with-java-export-exclusion:1.0.0",
+    # This is a java_export-level exclusion, not a maven artifact exclusion
+    exclusions = {
+        artifact("com.google.guava:guava"): [
+            "com.google.guava:failureaccess",
+        ],
+    },
+    deps = [
+        artifact("com.google.guava:guava"),
+    ],
+)
+
+maven_bom(
+    name = "java-export-exclusion-bom",
+    dependencies_maven_coordinates = "com.example:java-export-exclusion-bom-deps:1.0.0",
+    java_exports = [
+        ":with-java-export-exclusion",
+    ],
+    maven_coordinates = "com.example:java-export-exclusion-bom:1.0.0",
+)
+
+diff_test(
+    name = "validate-java-export-exclusion-bom",
+    file1 = ":java-export-exclusion-bom",
+    file2 = "java-export-exclusion-bom.golden.xml",
+)
+
+diff_test(
+    name = "validate-java-export-exclusion-dependencies-bom",
+    file1 = ":java-export-exclusion-bom-dependencies",
+    file2 = "java-export-exclusion-bom-dependencies.golden.xml",
+)
