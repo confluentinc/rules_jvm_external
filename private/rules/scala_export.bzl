@@ -110,7 +110,7 @@ def scala_export(
                 "$(location " + resource + ")"
                 for resource in doc_resources
             ],  # extra resources
-            tool = "@rules_jvm_external//private/tools/java/com/github/bazelbuild/rules_jvm_external/javadoc:create_jar",
+            tool = "@rules_jvm_external//private/tools/java/com/github/bazelbuild/rules_jvm_external/jar:CreateJar",
         )
         classifier_artifacts["scaladoc"] = scaladocs_jar_name
 

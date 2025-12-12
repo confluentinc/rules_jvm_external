@@ -13,7 +13,7 @@ load("//private/lib:toml_parser.bzl", "parse_toml")
 load("//private/rules:coursier.bzl", "DEFAULT_AAR_IMPORT_LABEL", "coursier_fetch", "pinned_coursier_fetch")
 load("//private/rules:unpinned_maven_pin_command_alias.bzl", "unpinned_maven_pin_command_alias")
 load("//private/rules:v1_lock_file.bzl", "v1_lock_file")
-load("//private/rules:v2_lock_file.bzl", "v2_lock_file")
+load("//private/rules:v3_lock_file.bzl", "v2_lock_file", "v3_lock_file")
 load(":download_pinned_deps.bzl", "download_pinned_deps")
 
 DEFAULT_REPOSITORIES = [
@@ -337,29 +337,52 @@ def _coordinates_match(artifact, coordinates):
     return (artifact.group == coords.group and
             artifact.artifact == coords.artifact)
 
-def _process_gradle_versions_file(parsed, bom_modules):
+def process_gradle_versions_file(parsed, bom_modules):
     artifacts = []
     boms = []
 
-    for value in parsed.get("libraries", {}).values():
-        if not "module" in value.keys():
-            continue
-        coords = value["module"]
+    for alias, value in parsed.get("libraries", {}).items():
+        # Handle different dependency declaration formats
+        coords = None
 
-        if "version.ref" in value.keys():
-            version = parsed.get("versions", {}).get(value["version.ref"])
-            if not version:
-                fail("Unable to resolve version.ref %s" % value["version.ref"])
-            coords += ":%s" % version
-        elif "version" in value.keys():
-            coords += ":%s" % value["version"]
+        # Case 1: Simple string notation: "group:artifact:version"
+        if type(value) == "string":
+            coords = value
+        # Case 2: Map notation
+        elif type(value) == "dict":
+            # Case 2a: Map with "module" key
+            if "module" in value.keys():
+                coords = value["module"]
+            # Case 2b: Map with "group" and "name" keys
+            elif "group" in value.keys() and "name" in value.keys():
+                coords = "%s:%s" % (value["group"], value["name"])
+            else:
+                fail("Library '%s' must have either 'module' or both 'group' and 'name' keys" % alias)
 
-        if value["module"] in bom_modules:
-            boms.append(unpack_coordinates(coords))
-        else:
-            packaging = value.get("package", "jar")
+            # Handle version (applies to both module and group+name formats)
+            if "version.ref" in value.keys():
+                version = parsed.get("versions", {}).get(value["version.ref"])
+                if not version:
+                    fail("Unable to resolve version.ref %s" % value["version.ref"])
+                coords += ":%s" % version
+            elif "version" in value.keys():
+                coords += ":%s" % value["version"]
+
+            # Handle packaging (e.g., "aar" for Android libraries)
+            # Note: Gradle uses "package" but we'll check common variants
+            packaging = value.get("package", value.get("packaging", "jar"))
             if packaging != "jar":
                 coords += "@%s" % packaging
+        else:
+            fail("Library '%s' has unsupported format: %s" % (alias, type(value)))
+
+        # Determine the module identifier for BOM checking
+        # Extract just group:artifact for comparison with bom_modules
+        module_id = coords.split(":")[0] + ":" + coords.split(":")[1] if ":" in coords else coords
+
+        if module_id in bom_modules:
+            boms.append(unpack_coordinates(coords))
+        else:
             artifacts.append(unpack_coordinates(coords))
 
     return artifacts, boms
@@ -376,7 +399,7 @@ def _process_module_tags(mctx, mod, target_repos, repo_name_2_module_name):
         content = mctx.read(mctx.path(from_toml_tag.libs_versions_toml))
         parsed = parse_toml(content)
 
-        (new_artifacts, new_boms) = _process_gradle_versions_file(parsed, from_toml_tag.bom_modules)
+        (new_artifacts, new_boms) = process_gradle_versions_file(parsed, from_toml_tag.bom_modules)
 
         repo["artifacts"] = repo.get("artifacts", []) + new_artifacts
         repo["boms"] = repo.get("boms", []) + new_boms
@@ -703,12 +726,15 @@ def maven_impl(mctx):
                     "artifacts": {},
                     "dependencies": {},
                     "repositories": {},
-                    "version": "2",
+                    "version": "3",
                 }
             else:
                 lock_file = json.decode(lock_file_content)
 
-            if v2_lock_file.is_valid_lock_file(lock_file):
+            if v3_lock_file.is_valid_lock_file(lock_file):
+                artifacts = v3_lock_file.get_artifacts(lock_file)
+                importer = v3_lock_file
+            elif v2_lock_file.is_valid_lock_file(lock_file):
                 artifacts = v2_lock_file.get_artifacts(lock_file)
                 importer = v2_lock_file
             elif v1_lock_file.is_valid_lock_file(lock_file):

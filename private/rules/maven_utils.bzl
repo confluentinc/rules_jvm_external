@@ -101,10 +101,6 @@ def generate_pom(
         "{classifier}": unpacked_coordinates.classifier or "jar",
     }
 
-    for key in exclusions:
-        if key not in versioned_dep_coordinates and key not in unversioned_dep_coordinates:
-            print("Key %s in exclusions does not occur in versioned_dep_coordinates or unversioned_dep_coordinates" % key)
-
     if parent:
         # We only want the groupId, artifactID, and version
         unpacked_parent = _unpack_coordinates(parent)
@@ -141,7 +137,7 @@ def generate_pom(
         # Bazel `exports` -> Maven `compile`
         # For boms, it seems the best practice is to use the default `compile` scope, unless the dependency is a BOM itself.
         new_scope = "compile" if dep in versioned_export_dep_coordinates_set or is_bom else "runtime"
-        if unpacked.packaging == "pom":
+        if unpacked.packaging == "pom" and is_bom:
             new_scope = "import"
 
         deps.append(format_dep(unpacked, scope = new_scope, indent = indent, exclusions = exclusions.get(dep, {}), include_version = include_version))
