@@ -68,9 +68,9 @@ def rules_jvm_external_deps(
         maybe(
             http_archive,
             name = "rules_cc",
-            urls = ["https://github.com/bazelbuild/rules_cc/archive/faeafdb82814b4f7295c555781e800f080607bdd.tar.gz"],
-            sha256 = "ca772d4fa149180dd1d81fe19a61c911dcebf9768d56209fc5bf382125ade0b6",
-            strip_prefix = "rules_cc-faeafdb82814b4f7295c555781e800f080607bdd",
+            urls = ["https://github.com/bazelbuild/rules_cc/archive/f1682203abae9ca3ca182f87bf5d430084f5d312.tar.gz"],
+            sha256 = "1e169367708bbbfae8550ee3ddd25620d88f06c029c8c7a9ed0662eb587b0675",
+            strip_prefix = "rules_cc-f1682203abae9ca3ca182f87bf5d430084f5d312",
         )
 
         maybe(
