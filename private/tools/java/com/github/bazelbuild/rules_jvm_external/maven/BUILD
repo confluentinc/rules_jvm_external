@@ -1,4 +1,5 @@
-load("@rules_java//java:defs.bzl", "java_binary", "java_library")
+load("@rules_java//java:java_binary.bzl", "java_binary")
+load("@rules_java//java:java_library.bzl", "java_library")
 load("@rules_jvm_external//:defs.bzl", "artifact")
 
 java_binary(
@@ -6,16 +7,17 @@ java_binary(
     main_class = "com.github.bazelbuild.rules_jvm_external.maven.MavenPublisher",
     visibility = ["//visibility:public"],
     runtime_deps = [
-        ":MavenPublisherLib",
+        ":maven-publisher-lib",
     ],
 )
 
 java_library(
-    name = "MavenPublisherLib",
+    name = "maven-publisher-lib",
     srcs = [
         "MavenPublisher.java",
         "MavenSigning.java",
     ],
+    visibility = ["//tests/com/github/bazelbuild/rules_jvm_external/maven:__pkg__"],
     deps = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/netrc",
@@ -81,20 +83,6 @@ java_binary(
         artifact(
             "org.apache.maven:maven-artifact",
             repository_name = "rules_jvm_external_deps",
-        ),
-    ],
-)
-
-java_test(
-    name = "MavenPublisherTest",
-    srcs = ["MavenPublisherTest.java"],
-    env = {
-    },
-    deps = [
-        ":MavenPublisherLib",
-        artifact(
-            "junit:junit",
-            repository_name = "regression_testing_coursier",
         ),
     ],
 )

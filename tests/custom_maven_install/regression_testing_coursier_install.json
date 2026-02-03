@@ -141,10 +141,10 @@
     "com.googlecode.matrix-toolkits-java:mtj": 858320340,
     "com.googlecode.netlib-java:netlib-java": 1268735594,
     "com.intellij:annotations": -585674531,
-    "com.microsoft.azure:adal4j": -1869354937,
+    "com.microsoft.azure:adal4j": 959330401,
     "com.nimbusds:lang-tag": -293986304,
-    "com.nimbusds:nimbus-jose-jwt": -769091146,
-    "com.nimbusds:oauth2-oidc-sdk": -182702489,
+    "com.nimbusds:nimbus-jose-jwt": 653453726,
+    "com.nimbusds:oauth2-oidc-sdk": -2073660182,
     "com.squareup.okhttp:logging-interceptor": 174810450,
     "com.squareup.okhttp:okhttp": -853576632,
     "com.squareup.okhttp:okhttp-ws": -911972507,
@@ -175,7 +175,7 @@
     "io.confluent:common-utils": 1056057613,
     "io.confluent:kafka-avro-serializer": -1528367490,
     "io.confluent:kafka-schema-registry-client": 1715850592,
-    "io.kubernetes:client-java": 1698480924,
+    "io.kubernetes:client-java": -2139056900,
     "io.kubernetes:client-java-api": 405311643,
     "io.kubernetes:client-java-proto": -324172791,
     "io.netty:netty": -761233739,
@@ -958,9 +958,9 @@
     },
     "com.nimbusds:nimbus-jose-jwt": {
       "shasums": {
-        "jar": "7ef3b0dd4a27407639d469cd75e7770463b4ee36e2c13535465da175d3b8f964"
+        "jar": "899791e2fc5512279348617bd30c64f22d9a1456d7c54619e1f8ff359dcb2cc5"
       },
-      "version": "10.6"
+      "version": "10.7"
     },
     "com.nimbusds:oauth2-oidc-sdk": {
       "shasums": {

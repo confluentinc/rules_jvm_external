@@ -27,6 +27,7 @@ import com.github.bazelbuild.rules_jvm_external.resolver.ResolutionResult;
 import com.github.bazelbuild.rules_jvm_external.resolver.Resolver;
 import com.github.bazelbuild.rules_jvm_external.resolver.events.EventListener;
 import com.github.bazelbuild.rules_jvm_external.resolver.events.PhaseEvent;
+import com.github.bazelbuild.rules_jvm_external.resolver.lockfile.DependencyIndex;
 import com.github.bazelbuild.rules_jvm_external.resolver.lockfile.V3LockFile;
 import com.github.bazelbuild.rules_jvm_external.resolver.netrc.Netrc;
 import com.github.bazelbuild.rules_jvm_external.resolver.remote.DownloadResult;
@@ -70,9 +71,10 @@ public abstract class AbstractMain {
 
       ResolutionResult resolutionResult = resolver.resolve(request);
 
-      infos = fulfillDependencyInfos(resolver, listener, config, resolutionResult.getResolution());
+      infos = fulfillDependencyInfos(resolver, listener, config, resolutionResult);
 
       writeLockFile(listener, config, request, infos, resolutionResult.getConflicts());
+      writeDependencyIndex(config, infos);
 
       System.exit(0);
     } catch (Exception e) {
@@ -87,7 +89,7 @@ public abstract class AbstractMain {
       Resolver resolver,
       EventListener listener,
       ResolverConfig config,
-      Graph<Coordinates> resolved) {
+      ResolutionResult resolutionResult) {
     listener.onEvent(new PhaseEvent("Downloading dependencies"));
 
     ResolutionRequest request = config.getResolutionRequest();
@@ -103,9 +105,12 @@ public abstract class AbstractMain {
             request.getLocalCache(resolver.getName()),
             request.getRepositories(),
             listener,
-            cacheResults);
+            cacheResults,
+            resolutionResult.getPaths());
 
     List<CompletableFuture<Set<DependencyInfo>>> futures = new LinkedList<>();
+
+    Graph<Coordinates> resolved = resolutionResult.getResolution();
 
     ExecutorService downloadService =
         Executors.newFixedThreadPool(
@@ -198,7 +203,7 @@ public abstract class AbstractMain {
         throw new UncheckedIOException(e);
       }
     } else {
-      indexResults = new PerJarIndexResults(new TreeSet<>(), new TreeMap<>());
+      indexResults = new PerJarIndexResults(new TreeSet<>(), new TreeSet<>(), new TreeMap<>());
     }
 
     toReturn.add(
@@ -209,6 +214,7 @@ public abstract class AbstractMain {
             result.getSha256(),
             dependencies,
             indexResults.getPackages(),
+            indexResults.getClasses(),
             indexResults.getServiceImplementations()));
 
     if (fetchSources) {
@@ -221,6 +227,7 @@ public abstract class AbstractMain {
                 source.getRepositories(),
                 source.getPath(),
                 source.getSha256(),
+                ImmutableSet.of(),
                 ImmutableSet.of(),
                 ImmutableSet.of(),
                 ImmutableSortedMap.of()));
@@ -237,6 +244,7 @@ public abstract class AbstractMain {
                 javadoc.getRepositories(),
                 javadoc.getPath(),
                 javadoc.getSha256(),
+                ImmutableSet.of(),
                 ImmutableSet.of(),
                 ImmutableSet.of(),
                 ImmutableSortedMap.of()));
@@ -258,8 +266,11 @@ public abstract class AbstractMain {
 
     listener.close();
 
+    // If a dependency index is being generated, we can omit packages from the lock file
+    // since that information is available in the index file
+    boolean includePackages = config.getDependencyIndexOutput() == null;
     Map<String, Object> rendered =
-        new V3LockFile(request.getRepositories(), infos, conflicts).render();
+        new V3LockFile(request.getRepositories(), infos, conflicts, includePackages).render();
 
     Map<Object, Object> toReturn = new TreeMap<>(rendered);
     // We don't need this, and having it will cause problems
@@ -277,17 +288,35 @@ public abstract class AbstractMain {
         new GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(toReturn) + "\n";
 
     try (OutputStream os = output == null ? System.out : Files.newOutputStream(output);
-         BufferedOutputStream bos = new BufferedOutputStream(os)) {
+        BufferedOutputStream bos = new BufferedOutputStream(os)) {
       bos.write(converted.getBytes(UTF_8));
     }
   }
 
+  private static void writeDependencyIndex(ResolverConfig config, Set<DependencyInfo> infos)
+      throws IOException {
+    Path output = config.getDependencyIndexOutput();
+    if (output == null) {
+      return;
+    }
+
+    Map<String, Object> rendered = new DependencyIndex(infos).render();
+
+    String converted =
+        new GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(rendered) + "\n";
+
+    try (OutputStream os = Files.newOutputStream(output);
+        BufferedOutputStream bos = new BufferedOutputStream(os)) {
+      bos.write(converted.getBytes(UTF_8));
+    }
+  }
 
   @SuppressWarnings("unchecked")
   public static Map<String, Integer> calculateArtifactHash(Map<String, Object> rendered) {
     Map<String, Map<String, Object>> allInfos = new LinkedHashMap<>();
 
-    Map<String, Map<String, Object>> artifacts = sortMapRecursively((Map<?, ?>) rendered.get("artifacts"));
+    Map<String, Map<String, Object>> artifacts =
+        sortMapRecursively((Map<?, ?>) rendered.get("artifacts"));
     for (Map.Entry<String, Map<String, Object>> dep : artifacts.entrySet()) {
       Map<String, Object> depInfo = dep.getValue();
       Map<String, String> shasums = (Map<String, String>) depInfo.get("shasums");
@@ -311,7 +340,8 @@ public abstract class AbstractMain {
       }
     }
 
-    Map<String, Iterable<String>> repositories = sortMapRecursively((Map<?, ?>) rendered.get("repositories"));
+    Map<String, Iterable<String>> repositories =
+        sortMapRecursively((Map<?, ?>) rendered.get("repositories"));
     for (Map.Entry<String, Iterable<String>> repo : repositories.entrySet()) {
       Iterable<String> repoArtifacts = repo.getValue();
       for (String art : repoArtifacts) {
@@ -319,7 +349,8 @@ public abstract class AbstractMain {
       }
     }
 
-    Map<String, Set<String>> dependencies = sortMapRecursively((Map<?, ?>) rendered.get("dependencies"));
+    Map<String, Set<String>> dependencies =
+        sortMapRecursively((Map<?, ?>) rendered.get("dependencies"));
     for (Map.Entry<String, Set<String>> dep : dependencies.entrySet()) {
       allInfos.get(dep.getKey()).put("dependencies", dep.getValue());
     }
@@ -331,7 +362,8 @@ public abstract class AbstractMain {
   }
 
   @SuppressWarnings("unchecked")
-  private static int calculateFinalHash(String curr, Map<String, Map<String, Object>> allInfos, Map<String, Integer> finalHash) {
+  private static int calculateFinalHash(
+      String curr, Map<String, Map<String, Object>> allInfos, Map<String, Integer> finalHash) {
     StarlarkRepr repr = new StarlarkRepr();
 
     if (finalHash.containsKey(curr)) {
@@ -343,8 +375,8 @@ public abstract class AbstractMain {
 
     finalHash.put(curr, repr.repr(allInfos.get(curr)).hashCode());
 
-
-    Set<String> deps = (Set<String>) allInfos.get(curr).getOrDefault("dependencies", Collections.emptySet());
+    Set<String> deps =
+        (Set<String>) allInfos.get(curr).getOrDefault("dependencies", Collections.emptySet());
     Map<String, Integer> hashedDeps = new TreeMap<>();
     for (String dep : deps) {
       hashedDeps.put(dep, calculateFinalHash(dep, allInfos, finalHash));

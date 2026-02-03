@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 
-load("//private/lib:coordinates.bzl", "to_external_form")
+load("//private/lib:coordinates.bzl", "to_external_form", "to_key")
 
 _REQUIRED_KEYS = ["artifacts", "dependencies", "repositories"]
 
@@ -43,6 +43,42 @@ def _get_input_artifacts_hash(lock_file_contents):
 def _get_lock_file_hash(lock_file_contents):
     return lock_file_contents.get("__RESOLVED_ARTIFACTS_HASH")
 
+def _print_friendly_hash_difference_v2(old_hash, new_hash):
+    if old_hash == new_hash:
+        return ""
+    return "expected %s and got %s" % (old_hash, new_hash)
+
+def _print_friendly_hash_difference_v3(old_hash, new_hash):
+    if old_hash == new_hash:
+        return ""
+
+    differences = []
+
+    all_keys = {k: True for k in list(old_hash.keys()) + list(new_hash.keys())}
+
+    for key in sorted(all_keys.keys()):
+        old_val = old_hash.get(key)
+        new_val = new_hash.get(key)
+
+        if old_val != new_val:
+            if old_val == None:
+                differences.append("%s: added" % key)
+            elif new_val == None:
+                differences.append("%s: removed" % key)
+            else:
+                differences.append("%s: %s vs %s" % (key, old_val, new_val))
+
+    total_count = len(differences)
+    shown = differences[:3]
+    other_count = total_count - len(shown)
+
+    result = "changes: " + ", ".join(shown)
+    if other_count == 1:
+        result += ", and 1 other change"
+    elif other_count > 1:
+        result += ", and %d other changes" % other_count
+    return result
+
 def _compute_lock_file_hash_v2(lock_file_contents):
     to_hash = {}
     for key in sorted(_REQUIRED_KEYS):
@@ -59,7 +95,7 @@ def _compute_final_hash(all_infos):
     # in case of circular dependencies, we take a normal hash of the original info as a starting point
     backup_hashes = {k: hash(repr(v)) for k, v in all_infos.items()}
 
-    # sets are balzel 8 only, we use a dict instead
+    # sets are bazel 8 only, we use a dict instead
     remaining = {k: 0 for k in all_infos.keys()}
 
     # bazel does not support recursion, we have to emulate it manually
@@ -160,23 +196,6 @@ def _to_maven_coordinates(unpacked):
 
     return coords
 
-def _to_key(unpacked):
-    coords = "%s:%s" % (unpacked["group"], unpacked["artifact"])
-
-    extension = unpacked.get("packaging", "jar")
-    if not extension:
-        extension = "jar"
-    classifier = unpacked.get("classifier", "jar")
-    if not classifier:
-        classifier = "jar"
-
-    if classifier != "jar":
-        coords += ":%s:%s" % (extension, classifier)
-    elif extension != "jar":
-        coords += ":%s" % extension
-
-    return coords
-
 def _from_key(key, spoofed_version):
     expected = "%s:%s" % (key, spoofed_version)
 
@@ -222,7 +241,7 @@ def _get_artifacts(lock_file_contents):
         for (classifier, shasum) in data.get("shasums", {}).items():
             root_unpacked["classifier"] = classifier
             coordinates = to_external_form(root_unpacked)
-            key = _to_key(root_unpacked)
+            key = to_key(root_unpacked)
 
             urls = []
             for (repo, artifacts_within_repo) in repositories.items():
@@ -297,6 +316,7 @@ v2_lock_file = struct(
     is_valid_lock_file = _is_valid_lock_file_v2,
     get_input_artifacts_hash = _get_input_artifacts_hash,
     get_lock_file_hash = _get_lock_file_hash,
+    print_friendly_hash_difference = _print_friendly_hash_difference_v2,
     compute_lock_file_hash = _compute_lock_file_hash_v2,
     get_artifacts = _get_artifacts,
     get_netrc_entries = _get_netrc_entries,
@@ -307,6 +327,7 @@ v3_lock_file = struct(
     is_valid_lock_file = _is_valid_lock_file_v3,
     get_input_artifacts_hash = _get_input_artifacts_hash,
     get_lock_file_hash = _get_lock_file_hash,
+    print_friendly_hash_difference = _print_friendly_hash_difference_v3,
     compute_lock_file_hash = _compute_lock_file_hash_v3,
     get_artifacts = _get_artifacts,
     get_netrc_entries = _get_netrc_entries,

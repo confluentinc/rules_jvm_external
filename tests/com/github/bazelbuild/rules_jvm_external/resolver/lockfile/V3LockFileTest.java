@@ -15,6 +15,9 @@
 package com.github.bazelbuild.rules_jvm_external.resolver.lockfile;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import com.github.bazelbuild.rules_jvm_external.Coordinates;
 import com.github.bazelbuild.rules_jvm_external.resolver.Conflict;
@@ -22,7 +25,6 @@ import com.github.bazelbuild.rules_jvm_external.resolver.DependencyInfo;
 import com.github.bazelbuild.rules_jvm_external.resolver.cmd.AbstractMain;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-
 import java.io.IOException;
 import java.net.URI;
 import java.util.HashMap;
@@ -31,7 +33,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-
 import org.junit.Test;
 
 public class V3LockFileTest {
@@ -49,9 +50,11 @@ public class V3LockFileTest {
             Optional.empty(),
             Set.of(),
             Set.of(),
+            Set.of(),
             new TreeMap<>());
 
-    Map<String, Object> rendered = new V3LockFile(repos, Set.of(aggregator), Set.of()).render();
+    Map<String, Object> rendered =
+        new V3LockFile(repos, Set.of(aggregator), Set.of(), true).render();
 
     Map<?, ?> artifacts = (Map<?, ?>) rendered.get("artifacts");
     Map<?, ?> data = (Map<?, ?>) artifacts.get("com.example:aggregator");
@@ -64,7 +67,7 @@ public class V3LockFileTest {
 
   @Test
   public void shouldRoundTripASimpleSetOfDependencies() {
-    V3LockFile roundTripped = roundTrip(new V3LockFile(repos, Set.of(), Set.of()));
+    V3LockFile roundTripped = roundTrip(new V3LockFile(repos, Set.of(), Set.of(), true));
 
     assertEquals(repos, roundTripped.getRepositories());
     assertEquals(Set.of(), roundTripped.getDependencyInfos());
@@ -73,7 +76,7 @@ public class V3LockFileTest {
 
   @Test
   public void shouldRoundTripM2Local() {
-    V3LockFile lockFile = new V3LockFile(repos, Set.of(), Set.of());
+    V3LockFile lockFile = new V3LockFile(repos, Set.of(), Set.of(), true);
     Map<String, Object> rendered = lockFile.render();
     rendered.put("m2local", true);
 
@@ -94,9 +97,10 @@ public class V3LockFileTest {
             Optional.of("c2c97a708be197aae5fee64dcc8b5e8a09c76c79a44c0e8e5b48b235084ec395"),
             Set.of(),
             Set.of(),
+            Set.of(),
             new TreeMap<>());
 
-    V3LockFile lockFile = roundTrip(new V3LockFile(repos, Set.of(info), Set.of()));
+    V3LockFile lockFile = roundTrip(new V3LockFile(repos, Set.of(info), Set.of(), true));
 
     assertEquals(Set.of(info), lockFile.getDependencyInfos());
   }
@@ -113,6 +117,7 @@ public class V3LockFileTest {
             Optional.of("cafebad08be197aae5fee64dcc8b5e8a09c76c79a44c0e8e5b48b235084ec395"),
             Set.of(),
             Set.of(),
+            Set.of(),
             new TreeMap<>());
 
     DependencyInfo info =
@@ -123,9 +128,10 @@ public class V3LockFileTest {
             Optional.of("c2c97a708be197aae5fee64dcc8b5e8a09c76c79a44c0e8e5b48b235084ec395"),
             Set.of(depCoords),
             Set.of(),
+            Set.of(),
             new TreeMap<>());
 
-    V3LockFile lockFile = roundTrip(new V3LockFile(repos, Set.of(info, dep), Set.of()));
+    V3LockFile lockFile = roundTrip(new V3LockFile(repos, Set.of(info, dep), Set.of(), true));
 
     assertEquals(Set.of(info, dep), lockFile.getDependencyInfos());
   }
@@ -139,20 +145,88 @@ public class V3LockFileTest {
             new Conflict(
                 new Coordinates("com.foo:bar:1.2.3"), new Coordinates("com.foo:bar:1.2.1")));
 
-    V3LockFile lockFile = roundTrip(new V3LockFile(repos, Set.of(), conflicts));
+    V3LockFile lockFile = roundTrip(new V3LockFile(repos, Set.of(), conflicts, true));
 
     assertEquals(conflicts, lockFile.getConflicts());
   }
 
   @Test
+  public void shouldIncludePackagesWhenIncludePackagesIsTrue() {
+    DependencyInfo info =
+        new DependencyInfo(
+            new Coordinates("com.example:item:1.0.0"),
+            repos,
+            Optional.empty(),
+            Optional.of("abc123"),
+            Set.of(),
+            Set.of("com.example", "com.example.sub"),
+            Set.of(),
+            new TreeMap<>());
+
+    Map<String, Object> rendered = new V3LockFile(repos, Set.of(info), Set.of(), true).render();
+
+    assertNotNull(rendered.get("packages"));
+    @SuppressWarnings("unchecked")
+    Map<String, Set<String>> packages = (Map<String, Set<String>>) rendered.get("packages");
+    assertFalse(packages.isEmpty());
+    assertEquals(Set.of("com.example", "com.example.sub"), packages.get("com.example:item"));
+  }
+
+  @Test
+  public void shouldExcludePackagesWhenIncludePackagesIsFalse() {
+    DependencyInfo info =
+        new DependencyInfo(
+            new Coordinates("com.example:item:1.0.0"),
+            repos,
+            Optional.empty(),
+            Optional.of("abc123"),
+            Set.of(),
+            Set.of("com.example", "com.example.sub"),
+            Set.of(),
+            new TreeMap<>());
+
+    Map<String, Object> rendered = new V3LockFile(repos, Set.of(info), Set.of(), false).render();
+
+    assertNull(rendered.get("packages"));
+  }
+
+  @Test
+  public void shouldStillIncludeOtherFieldsWhenPackagesExcluded() {
+    DependencyInfo info =
+        new DependencyInfo(
+            new Coordinates("com.example:item:1.0.0"),
+            repos,
+            Optional.empty(),
+            Optional.of("abc123"),
+            Set.of(),
+            Set.of("com.example"),
+            Set.of(),
+            new TreeMap<>());
+
+    Map<String, Object> rendered = new V3LockFile(repos, Set.of(info), Set.of(), false).render();
+
+    // Packages should be excluded
+    assertNull(rendered.get("packages"));
+
+    // But other fields should still be present
+    assertNotNull(rendered.get("artifacts"));
+    assertNotNull(rendered.get("dependencies"));
+    assertNotNull(rendered.get("services"));
+    assertNotNull(rendered.get("repositories"));
+    assertEquals("3", rendered.get("version"));
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   public void testCalculateArtifactHashMatchesStoredHash() throws IOException {
-    String lockFileContent = new String(
-        getClass().getClassLoader().getResourceAsStream("maven_install.json").readAllBytes());
+    String lockFileContent =
+        new String(
+            getClass().getClassLoader().getResourceAsStream("maven_install.json").readAllBytes());
 
     Gson gson = new GsonBuilder().create();
     Map<String, Object> lockFileData = gson.fromJson(lockFileContent, Map.class);
-    Map<String, Double> storedHash = (Map<String, Double>) lockFileData.get("__RESOLVED_ARTIFACTS_HASH");
+    Map<String, Double> storedHash =
+        (Map<String, Double>) lockFileData.get("__RESOLVED_ARTIFACTS_HASH");
 
     Map<String, Object> dependencies = (Map<String, Object>) lockFileData.remove("dependencies");
     Map<String, Set<String>> convertedDeps = new TreeMap<>();
@@ -164,7 +238,10 @@ public class V3LockFileTest {
 
     Map<String, Integer> calculatedHash = AbstractMain.calculateArtifactHash(lockFileData);
 
-    assertEquals("Hash mismatch: calculated hash does not match stored hash", storedHash.size(), calculatedHash.size());
+    assertEquals(
+        "Hash mismatch: calculated hash does not match stored hash",
+        storedHash.size(),
+        calculatedHash.size());
 
     for (Map.Entry<String, Double> entry : storedHash.entrySet()) {
       String key = entry.getKey();

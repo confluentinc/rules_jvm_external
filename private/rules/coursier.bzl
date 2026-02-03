@@ -17,6 +17,7 @@ load(
     "//private:coursier_utilities.bzl",
     "SUPPORTED_PACKAGING_TYPES",
     "contains_git_conflict_markers",
+    "get_classifier",
     "is_maven_local_path",
     "to_repository_name",
 )
@@ -29,6 +30,7 @@ load(
     "COURSIER_CLI_GITHUB_ASSET_URL",
     "COURSIER_CLI_SHA256",
 )
+load("//private/lib:coordinates.bzl", "to_key", "unpack_coordinates")
 load("//private/lib:urls.bzl", "remove_auth_from_url")
 load("//private/rules:v1_lock_file.bzl", "v1_lock_file")
 load("//private/rules:v3_lock_file.bzl", "v2_lock_file", "v3_lock_file")
@@ -40,7 +42,9 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@package_metadata//rules:package_metadata.bzl", "package_metadata")
 load("@rules_license//rules:package_info.bzl", "package_info")
-load("@rules_java//java:defs.bzl", "java_binary", "java_library", "java_plugin")
+load("@rules_java//java:java_binary.bzl", "java_binary")
+load("@rules_java//java:java_library.bzl", "java_library")
+load("@rules_java//java:java_plugin.bzl", "java_plugin")
 load("@rules_jvm_external//private/rules:pin_dependencies.bzl", "pin_dependencies")
 load("@rules_jvm_external//private/rules:jvm_import.bzl", "jvm_import")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
@@ -59,7 +63,7 @@ bzl_library(
 )
 """
 
-DEFAULT_AAR_IMPORT_LABEL = "@build_bazel_rules_android//android:rules.bzl"
+DEFAULT_AAR_IMPORT_LABEL = "@rules_android//rules:rules.bzl"
 
 _AAR_IMPORT_STATEMENT = """\
 load("%s", "aar_import")
@@ -78,6 +82,14 @@ sh_binary(
     deps = [
         "@bazel_tools//tools/bash/runfiles",
     ],
+    visibility = ["//visibility:public"],
+)
+"""
+
+_BUILD_DIRECT_DEPS = """
+sh_binary(
+    name = "direct_deps",
+    srcs = ["direct_deps.sh"],
     visibility = ["//visibility:public"],
 )
 """
@@ -114,6 +126,7 @@ pin_dependencies(
     fetch_sources = {fetch_sources},
     fetch_javadocs = {fetch_javadocs},
     lock_file = {lock_file},
+    dependency_index = {dependency_index},
     jvm_flags = {jvm_flags},
     visibility = ["//visibility:public"],
     resolver = {resolver},
@@ -255,7 +268,9 @@ def _relativize_and_symlink_file_in_maven_local(repository_ctx, absolute_path):
     return artifact_relative_path
 
 def _get_aar_import_statement_or_empty_str(repository_ctx):
-    if repository_ctx.attr.use_starlark_android_rules:
+    # Use the Starlark version of aar_import if requested, or if this version of Bazel
+    # does not have native aar_import.
+    if repository_ctx.attr.use_starlark_android_rules or not hasattr(native, "aar_import"):
         # parse the label to validate it
         _ = Label(repository_ctx.attr.aar_import_bzl_label)
         return _AAR_IMPORT_STATEMENT % repository_ctx.attr.aar_import_bzl_label
@@ -439,6 +454,73 @@ def _add_outdated_files(repository_ctx, artifacts, boms, repositories):
         executable = True,
     )
 
+def get_direct_dependencies(all_artifacts, input_artifacts):
+    """Returns the resolved coordinates for the given input (direct) artifacts.
+
+    Args:
+        all_artifacts: The list of all resolved artifacts from importer.get_artifacts(),
+                      each with a "coordinates" field in Gradle External format.
+        input_artifacts: A list of dicts with "group", "artifact", and optionally
+                        "classifier" and "packaging" keys representing the direct
+                        dependencies the user requested.
+
+    Returns:
+        A sorted list of resolved coordinates in Gradle External format.
+    """
+
+    # Build a lookup from versionless key to full coordinates.
+    # We store both the full key and a simplified group:artifact key
+    # to handle cases where input doesn't specify packaging but the
+    # resolved artifact has non-jar packaging (e.g., pom, aar).
+    resolved_lookup = {}
+    simple_lookup = {}
+    for artifact in all_artifacts:
+        coords = artifact.get("coordinates", "")
+        if coords:
+            full_key = to_key(coords)
+            resolved_lookup[full_key] = coords
+
+            # Also store by simple group:artifact for fallback matching
+            unpacked = unpack_coordinates(coords)
+            simple_key = "%s:%s" % (unpacked.group, unpacked.artifact)
+
+            # Only use simple key if no classifier (classifiers are intentional)
+            classifier = getattr(unpacked, "classifier", None)
+            if not classifier:
+                simple_lookup[simple_key] = coords
+
+    direct_deps = {}
+    for input_artifact in input_artifacts:
+        key = to_key(input_artifact)
+        resolved = resolved_lookup.get(key)
+        if not resolved:
+            # Fallback: try simple group:artifact lookup for artifacts where
+            # user didn't specify packaging but resolution found non-jar packaging
+            unpacked = unpack_coordinates(input_artifact)
+            simple_key = "%s:%s" % (unpacked.group, unpacked.artifact)
+            resolved = simple_lookup.get(simple_key)
+        if resolved:
+            direct_deps[resolved] = True
+
+    return sorted(direct_deps.keys())
+
+def _add_direct_deps_files(repository_ctx, direct_deps):
+    """Creates the direct_deps.sh script file.
+
+    Args:
+        repository_ctx: The repository context.
+        direct_deps: A list of resolved coordinates in Gradle External format.
+    """
+    script_content = "#!/bin/bash\n"
+    for dep in direct_deps:
+        script_content += "echo '%s'\n" % dep
+
+    repository_ctx.file(
+        "direct_deps.sh",
+        script_content,
+        executable = True,
+    )
+
 def is_repin_required(repository_ctx):
     env_var_names = repository_ctx.os.environ.keys()
     return "RULES_JVM_EXTERNAL_REPIN" not in env_var_names and "REPIN" not in env_var_names
@@ -557,10 +639,10 @@ def _pinned_coursier_fetch_impl(repository_ctx):
             )
         elif computed_artifacts_hash != input_artifacts_hash:
             if _get_fail_if_repin_required(repository_ctx):
-                fail("%s_install.json contains an invalid input signature (expected %s and got %s) and must be regenerated. " % (
+                to_print = importer.print_friendly_hash_difference(input_artifacts_hash, computed_artifacts_hash)
+                fail("%s_install.json contains an invalid input signature (%s) and must be regenerated. " % (
                          user_provided_name,
-                         input_artifacts_hash,
-                         computed_artifacts_hash,
+                         to_print,
                      ) +
                      "This typically happens when the maven_install artifacts have been changed but not repinned. " +
                      "PLEASE DO NOT MODIFY THIS FILE DIRECTLY! To generate a new " +
@@ -586,11 +668,12 @@ def _pinned_coursier_fetch_impl(repository_ctx):
         # Then, validate that the signature provided matches the contents of the dependency_tree.
         # This is to stop users from manually modifying maven_install.json.
         if _get_fail_if_repin_required(repository_ctx):
+            computed_hash = importer.compute_lock_file_hash(maven_install_json_content)
+            to_print = importer.print_friendly_hash_difference(dep_tree_signature, computed_hash)
             fail(
-                "%s_install.json contains an invalid signature (expected %s and got %s) and may be corrupted. " % (
+                "%s_install.json contains an invalid signature (%s) and may be corrupted. " % (
                     user_provided_name,
-                    dep_tree_signature,
-                    importer.compute_lock_file_hash(maven_install_json_content),
+                    to_print,
                 ) +
                 "PLEASE DO NOT MODIFY THIS FILE DIRECTLY! To generate a new " +
                 "%s_install.json and re-pin the artifacts, follow these steps: \n\n" % user_provided_name +
@@ -692,6 +775,7 @@ def _pinned_coursier_fetch_impl(repository_ctx):
             for a in artifacts
         },
         override_targets = repository_ctx.attr.override_targets,
+        override_target_visibilities = repository_ctx.attr.override_target_visibilities,
         skip_maven_local_dependencies = False,
     )
 
@@ -704,9 +788,13 @@ def _pinned_coursier_fetch_impl(repository_ctx):
 
     pin_target = generate_pin_target(repository_ctx, unpinned_pin_target)
 
+    all_artifacts = importer.get_artifacts(maven_install_json_content)
+    direct_deps = get_direct_dependencies(all_artifacts, artifacts)
+    _add_direct_deps_files(repository_ctx, direct_deps)
+
     repository_ctx.file(
         "BUILD",
-        (_BUILD + _BUILD_OUTDATED).format(
+        (_BUILD + _BUILD_OUTDATED + _BUILD_DIRECT_DEPS).format(
             visibilities = ",".join(["\"%s\"" % s for s in (["//visibility:public"] if not repository_ctx.attr.strict_visibility else repository_ctx.attr.strict_visibility_value)]),
             repository_name = repository_ctx.name,
             imports = generated_imports,
@@ -753,6 +841,15 @@ def generate_pin_target(repository_ctx, unpinned_pin_target):
         else:
             fail("Unknown resolver")
 
+        dependency_index_location = None
+        if repository_ctx.attr.dependency_index:
+            dep_index_package_path = repository_ctx.attr.dependency_index.package
+            dep_index_file_name = repository_ctx.attr.dependency_index.name
+            if dep_index_package_path == "":
+                dependency_index_location = dep_index_file_name
+            else:
+                dependency_index_location = "/".join([dep_index_package_path, dep_index_file_name])
+
         return _IN_REPO_PIN.format(
             boms = repr(repository_ctx.attr.boms),
             artifacts = repr(repository_ctx.attr.artifacts),
@@ -762,6 +859,7 @@ def generate_pin_target(repository_ctx, unpinned_pin_target):
             fetch_sources = repr(repository_ctx.attr.fetch_sources),
             fetch_javadocs = repr(repository_ctx.attr.fetch_javadoc),
             lock_file = repr(lock_file_location),
+            dependency_index = repr(dependency_index_location),
             resolver = repr(str(resolver_target)),
         )
 
@@ -1008,18 +1106,35 @@ def make_coursier_dep_tree(
         excluded_artifacts,
         _is_verbose(repository_ctx),
     )
-    return rewrite_files_attribute_if_necessary(repository_ctx, dep_tree)
+    return filter_dependencies_if_necessary(repository_ctx, dep_tree)
 
-def rewrite_files_attribute_if_necessary(repository_ctx, dep_tree):
-    # There are cases where `coursier` will download both the pom and the
+def filter_dependencies_if_necessary(repository_ctx, dep_tree):
+    # This loops check for two things:
+    #
+    # 1. There are cases where `coursier` will download both the pom and the
     # jar but will include the path to the pom instead of the jar in the
     # `file` attribute. This differs from both gradle and maven. Massage the
     # `file` attributes if necessary.
     # https://github.com/bazelbuild/rules_jvm_external/issues/1250
+    #
+    # 2. When asked to fetch sources for a pom artifact, coursier will return a
+    #    dependency object with `"file": null`. There is no need to propagate
+    #    this to the external repo we are generating, so strip those out here.
+    #    We can't check the coordinates for pom packaging though because
+    #    coursier doesn't consistently include pom in the string, for example it
+    #    will return dependencies both like
+    #    "org.javamoney:moneta:pom:sources:1.4.4" and
+    #    "org.apache.logging.log4j:log4j:jar:sources:3.0.0-beta3".
+
     amended_deps = []
     for dep in dep_tree["dependencies"]:
         if not dep.get("file", None):
-            amended_deps.append(dep)
+            if get_classifier(dep["coord"]) == "sources":
+                # Skip source artifacts with no file.
+                if _is_verbose(repository_ctx):
+                    print("Removing source artifact with no file: %s" % dep["coord"])
+            else:
+                amended_deps.append(dep)
             continue
 
         # You'd think we could use skylib here to do the heavy lifting, but
@@ -1111,9 +1226,6 @@ def _coursier_fetch_impl(repository_ctx):
     # Once coursier finishes a fetch, it generates a tree of artifacts and their
     # transitive dependencies in a JSON file. We use that as the source of truth
     # to generate the repository's BUILD file.
-    #
-    # Coursier generates duplicate artifacts sometimes. Deduplicate them using
-    # the file name value as the key.
     dep_tree = make_coursier_dep_tree(
         repository_ctx,
         artifacts,
@@ -1363,6 +1475,7 @@ def _coursier_fetch_impl(repository_ctx):
             for a in artifacts
         },
         override_targets = repository_ctx.attr.override_targets,
+        override_target_visibilities = repository_ctx.attr.override_target_visibilities,
         # Skip maven local dependencies if generating the unpinned repository
         skip_maven_local_dependencies = _is_unpinned(repository_ctx),
     )
@@ -1379,9 +1492,13 @@ def _coursier_fetch_impl(repository_ctx):
         outdated_build_file_content = _BUILD_OUTDATED
         _add_outdated_files(repository_ctx, artifacts, boms, repositories)
 
+    all_artifacts = v2_lock_file.get_artifacts(lock_file_contents)
+    direct_deps = get_direct_dependencies(all_artifacts, artifacts)
+    _add_direct_deps_files(repository_ctx, direct_deps)
+
     repository_ctx.file(
         "BUILD",
-        (_BUILD + _BUILD_PIN + outdated_build_file_content).format(
+        (_BUILD + _BUILD_PIN + outdated_build_file_content + _BUILD_DIRECT_DEPS).format(
             visibilities = ",".join(["\"%s\"" % s for s in (["//visibility:public"] if not repository_ctx.attr.strict_visibility else repository_ctx.attr.strict_visibility_value)]),
             repository_name = repository_name,
             imports = generated_imports,
@@ -1475,7 +1592,9 @@ pinned_coursier_fetch = repository_rule(
         "fetch_javadoc": attr.bool(default = False),
         "generate_compat_repositories": attr.bool(default = False),  # generate a compatible layer with repositories for each artifact
         "maven_install_json": attr.label(allow_single_file = True),
+        "dependency_index": attr.label(allow_single_file = True),
         "override_targets": attr.string_dict(default = {}),
+        "override_target_visibilities": attr.string_list_dict(default = {}),
         "strict_visibility": attr.bool(
             doc = """Controls visibility of transitive dependencies.
 
@@ -1545,7 +1664,9 @@ coursier_fetch = repository_rule(
             ],
         ),
         "maven_install_json": attr.label(allow_single_file = True),
+        "dependency_index": attr.label(allow_single_file = True),
         "override_targets": attr.string_dict(default = {}),
+        "override_target_visibilities": attr.string_list_dict(default = {}),
         "strict_visibility": attr.bool(
             doc = """Controls visibility of transitive dependencies
 
