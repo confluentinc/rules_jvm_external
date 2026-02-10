@@ -34,6 +34,26 @@ diff_test(
     file2 = "bom.golden.xml",
 )
 
+# BOM with imported BOMs test:
+# Tests that imported_boms are rendered with <type>pom</type> and <scope>import</scope>
+maven_bom(
+    name = "bom-with-imports",
+    imported_boms = [
+        "com.fasterxml.jackson:jackson-bom:2.19.0",
+        "io.grpc:grpc-bom:1.75.0",
+    ],
+    java_exports = [
+        ":one-dep",
+    ],
+    maven_coordinates = "com.example:bom-with-imports:1.0.0",
+)
+
+diff_test(
+    name = "validate-bom-with-imports",
+    file1 = ":bom-with-imports",
+    file2 = "bom-with-imports.golden.xml",
+)
+
 diff_test(
     name = "validate-dependencies-bom",
     file1 = ":bom-dependencies",
