@@ -37,6 +37,10 @@ def _maven_bom_impl(ctx):
     coordinates = ctx.expand_make_variables("coordinates", ctx.attr.maven_coordinates, ctx.var)
     dep_coordinates = [ctx.expand_make_variables("dep", f.coordinates, ctx.var) for f in fragments]
 
+    # Expand managed_dependencies coordinates (raw groupId:artifactId:version strings
+    # that don't require java_export targets).
+    managed_dep_coordinates = [ctx.expand_make_variables("managed_dep", d, ctx.var) for d in ctx.attr.managed_dependencies]
+
     # Convert imported BOMs to @pom format so generate_pom renders them with
     # <type>pom</type> and <scope>import</scope>.
     imported_bom_coordinates = []
@@ -51,7 +55,7 @@ def _maven_bom_impl(ctx):
         ctx,
         coordinates = coordinates,
         is_bom = True,
-        versioned_dep_coordinates = imported_bom_coordinates + dep_coordinates,
+        versioned_dep_coordinates = imported_bom_coordinates + dep_coordinates + managed_dep_coordinates,
         pom_template = ctx.file.pom_template,
         out_name = "%s.xml" % ctx.label.name,
     )
@@ -79,6 +83,9 @@ _maven_bom = rule(
         ),
         "imported_boms": attr.string_list(
             doc = "Maven coordinates of BOMs to import (rendered with type=pom, scope=import). Each entry should be in groupId:artifactId:version format.",
+        ),
+        "managed_dependencies": attr.string_list(
+            doc = "Maven coordinates of dependencies to include directly in the BOM without requiring java_export targets. Each entry should be in groupId:artifactId:version format.",
         ),
     },
 )
@@ -156,7 +163,8 @@ _maven_dependencies_bom = rule(
 def maven_bom(
         name,
         maven_coordinates,
-        java_exports,
+        java_exports = None,
+        managed_dependencies = None,
         imported_boms = None,
         bom_pom_template = None,
         dependencies_maven_coordinates = None,
@@ -168,7 +176,8 @@ def maven_bom(
     """Generates a Maven BOM `pom.xml` file and an optional "dependencies" `pom.xml`.
 
     The generated BOM will contain a list of all the coordinates of the
-    `java_export` targets in the `java_exports` parameters. An optional
+    `java_export` targets in the `java_exports` parameters, plus any raw
+    Maven coordinates specified in `managed_dependencies`. An optional
     dependencies artifact will be created if the parameter
     `dependencies_maven_coordinates` is set.
 
@@ -209,26 +218,30 @@ def maven_bom(
       bom_pom_template: A template used for generating the `pom.xml` of the BOM at `maven_coordinates` (optional)
       dependencies_maven_coordinates: The maven coordinates of a dependencies artifact to generate in GAV format. If empty, none will be generated. (optional)
       dependencies_pom_template: A template used for generating the `pom.xml` of the dependencies artifact at `dependencies_maven_coordinates` (optional)
-      java_exports: A list of `java_export` targets that are used to generate the BOM.
+      java_exports: A list of `java_export` targets that are used to generate the BOM. (optional)
+      managed_dependencies: A list of Maven coordinates in `groupId:artifactId:version` format to include directly in the BOM. These do not require `java_export` targets, enabling pure version-management BOMs with no source code. (optional)
       imported_boms: A list of Maven coordinates of BOMs to import in `groupId:artifactId:version` format. These will be rendered with `<type>pom</type>` and `<scope>import</scope>` in the generated BOM. (optional)
     """
+    java_exports = java_exports or []
     fragments = []
     labels = [_label(je) for je in java_exports]
 
     # `same_package_label` doesn't exist in Bazel 5, but we still support it
     # so we check the version here to call a non-deprecated API in recent
     # Bazel versions, or the older (deprecated) API in Bazel 5.
-    feature_check_label = Label("//:doesnotexistinrulesjvmexternal")
-    if hasattr(feature_check_label, "same_package_label"):
-        fragments = [l.same_package_label("%s.bom-fragment" % l.name) for l in labels]
-    else:
-        # TODO: Drop this branch once we drop Bazel 5 support
-        fragments = [l.relative(":%s.bom-fragment" % l.name) for l in labels]
+    if labels:
+        feature_check_label = Label("//:doesnotexistinrulesjvmexternal")
+        if hasattr(feature_check_label, "same_package_label"):
+            fragments = [l.same_package_label("%s.bom-fragment" % l.name) for l in labels]
+        else:
+            # TODO: Drop this branch once we drop Bazel 5 support
+            fragments = [l.relative(":%s.bom-fragment" % l.name) for l in labels]
 
     _maven_bom(
         name = name,
         maven_coordinates = maven_coordinates,
         imported_boms = imported_boms or [],
+        managed_dependencies = managed_dependencies or [],
         pom_template = bom_pom_template,
         fragments = fragments,
         tags = tags,

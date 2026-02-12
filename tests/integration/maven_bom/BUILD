@@ -161,3 +161,25 @@ diff_test(
     file1 = ":combined-exclusion-bom-dependencies",
     file2 = "combined-exclusion-bom-dependencies.golden.xml",
 )
+
+# Managed dependencies test:
+# Tests that managed_dependencies (raw coordinates without java_export targets)
+# are rendered correctly in the BOM, including mixed use with imported_boms.
+maven_bom(
+    name = "managed-deps-bom",
+    imported_boms = [
+        "com.fasterxml.jackson:jackson-bom:2.19.2",
+    ],
+    managed_dependencies = [
+        "com.google.guava:guava:32.0.1-jre",
+        "org.apache.commons:commons-lang3:3.18.0",
+        "org.slf4j:slf4j-api:1.7.36",
+    ],
+    maven_coordinates = "com.example:managed-deps-bom:1.0.0",
+)
+
+diff_test(
+    name = "validate-managed-deps-bom",
+    file1 = ":managed-deps-bom",
+    file2 = "managed-deps-bom.golden.xml",
+)
