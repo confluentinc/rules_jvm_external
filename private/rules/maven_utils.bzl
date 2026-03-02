@@ -182,8 +182,13 @@ def generate_pom(
         ]
         substitutions.update({"{parent}": "".join(parts)})
 
+    # Sort BOM imports (packaging=pom) first, then regular deps, each group
+    # sorted alphabetically. This follows Maven BOM convention (e.g. Spring Boot).
+    versioned_boms = sorted([d for d in versioned_dep_coordinates if d.endswith("@pom")])
+    versioned_deps = sorted([d for d in versioned_dep_coordinates if not d.endswith("@pom")])
+
     deps = []
-    for dep in sorted(versioned_dep_coordinates) + sorted(unversioned_dep_coordinates):
+    for dep in versioned_boms + versioned_deps + sorted(unversioned_dep_coordinates):
         include_version = dep in versioned_dep_coordinates
         unpacked = _unpack_coordinates(dep)
 
