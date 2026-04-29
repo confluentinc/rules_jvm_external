@@ -4,8 +4,10 @@ load(
     "//private/rules:coursier.bzl",
     "compute_dependency_inputs_signature",
     "get_coursier_cache_or_default",
+    "get_coursier_sha256",
     "get_direct_dependencies",
     "get_netrc_lines_from_entries",
+    "strip_credentials_from_cache_path",
     infer = "infer_artifact_path_from_primary_and_repos",
 )
 load("//private/rules:v1_lock_file.bzl", "add_netrc_entries_from_mirror_urls")
@@ -446,6 +448,28 @@ def _get_coursier_cache_or_default_enabled_with_custom_location_test(ctx):
 
 get_coursier_cache_or_default_enabled_with_custom_location_test = add_test(_get_coursier_cache_or_default_enabled_with_custom_location_test)
 
+def _get_coursier_sha256_default_test_impl(ctx):
+    env = unittest.begin(ctx)
+    asserts.equals(
+        env,
+        "default_sha256_value",
+        get_coursier_sha256({}, "default_sha256_value"),
+    )
+    return unittest.end(env)
+
+get_coursier_sha256_default_test = add_test(_get_coursier_sha256_default_test_impl)
+
+def _get_coursier_sha256_from_env_test_impl(ctx):
+    env = unittest.begin(ctx)
+    asserts.equals(
+        env,
+        "custom_sha256_from_env",
+        get_coursier_sha256({"COURSIER_SHA256": "custom_sha256_from_env"}, "default_sha256_value"),
+    )
+    return unittest.end(env)
+
+get_coursier_sha256_from_env_test = add_test(_get_coursier_sha256_from_env_test_impl)
+
 def _mock_which_true(path):
     return True
 
@@ -657,6 +681,39 @@ def _get_direct_dependencies_test_impl(ctx):
     return unittest.end(env)
 
 get_direct_dependencies_test = add_test(_get_direct_dependencies_test_impl)
+
+def _strip_credentials_no_credentials_test_impl(ctx):
+    env = unittest.begin(ctx)
+    asserts.equals(
+        env,
+        "/https/c1/group/artifact/version/foo.jar",
+        strip_credentials_from_cache_path("/https/c1/group/artifact/version/foo.jar"),
+    )
+    return unittest.end(env)
+
+strip_credentials_no_credentials_test = add_test(_strip_credentials_no_credentials_test_impl)
+
+def _strip_credentials_simple_username_test_impl(ctx):
+    env = unittest.begin(ctx)
+    asserts.equals(
+        env,
+        "/https/c1/group/artifact/version/foo.jar",
+        strip_credentials_from_cache_path("/https/a%40c1/group/artifact/version/foo.jar"),
+    )
+    return unittest.end(env)
+
+strip_credentials_simple_username_test = add_test(_strip_credentials_simple_username_test_impl)
+
+def _strip_credentials_email_username_test_impl(ctx):
+    env = unittest.begin(ctx)
+    asserts.equals(
+        env,
+        "/https/c1/group/artifact/version/foo.jar",
+        strip_credentials_from_cache_path("/https/a%40b%40c1/group/artifact/version/foo.jar"),
+    )
+    return unittest.end(env)
+
+strip_credentials_email_username_test = add_test(_strip_credentials_email_username_test_impl)
 
 def coursier_test_suite():
     unittest.suite(

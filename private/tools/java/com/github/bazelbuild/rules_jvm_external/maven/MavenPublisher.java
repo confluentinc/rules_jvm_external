@@ -124,7 +124,9 @@ public class MavenPublisher {
     SigningMetadata signingMetadata =
         new SigningMetadata(gpgSign, useInMemoryPgpKeys, signingKey, signingPassword);
 
-    final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    final ExecutorService executorService =
+        Executors.newFixedThreadPool(
+            Optional.ofNullable(System.getenv("RJE_MAX_THREADS")).map(Integer::parseInt).orElse(8));
 
     try {
       run(
@@ -318,7 +320,7 @@ public class MavenPublisher {
       Path item,
       SigningMetadata signingMetadata,
       Executor executor)
-      throws IOException, InterruptedException {
+      throws IOException {
 
     String base =
         String.format(
@@ -331,40 +333,57 @@ public class MavenPublisher {
             coords.version);
 
     byte[] toHash = Files.readAllBytes(item);
-    Path md5 = Files.createTempFile(item.getFileName().toString(), ".md5");
-    Files.write(md5, toMd5(toHash).getBytes(UTF_8));
 
-    Path sha1 = Files.createTempFile(item.getFileName().toString(), ".sha1");
-    Files.write(sha1, toSha1(toHash).getBytes(UTF_8));
+    // Upload primary file first, then upload hash files after it completes
+    // This is required for Artifactory which rejects hash files uploaded before the primary file
+    CompletableFuture<Void> primaryUpload = upload(String.format("%s%s", base, append), credentials, item, executor);
 
-    Path sha256 = Files.createTempFile(item.getFileName().toString(), ".sha256");
-    Files.write(sha256, toSha256(toHash).getBytes(UTF_8));
+    return primaryUpload.thenCompose(v -> {
+      try {
+        List<CompletableFuture<?>> hashUploads = new ArrayList<>();
 
-    Path sha512 = Files.createTempFile(item.getFileName().toString(), ".sha512");
-    Files.write(sha512, toSha512(toHash).getBytes(UTF_8));
+        // For SNAPSHOT versions, skip uploading separate checksum files
+        // Artifactory renames SNAPSHOT files with timestamps, causing checksum uploads to fail
+        // Most Maven repositories (Artifactory, Nexus, etc.) automatically calculate checksums
+        boolean isSnapshot = coords.version.contains("SNAPSHOT");
+        if (!isSnapshot) {
+          Path md5 = Files.createTempFile(item.getFileName().toString(), ".md5");
+          Files.write(md5, toMd5(toHash).getBytes(UTF_8));
 
-    List<CompletableFuture<?>> uploads = new ArrayList<>();
-    uploads.add(upload(String.format("%s%s", base, append), credentials, item, executor));
-    uploads.add(upload(String.format("%s%s.md5", base, append), credentials, md5, executor));
-    uploads.add(upload(String.format("%s%s.sha1", base, append), credentials, sha1, executor));
-    uploads.add(upload(String.format("%s%s.sha256", base, append), credentials, sha256, executor));
-    uploads.add(upload(String.format("%s%s.sha512", base, append), credentials, sha512, executor));
+          Path sha1 = Files.createTempFile(item.getFileName().toString(), ".sha1");
+          Files.write(sha1, toSha1(toHash).getBytes(UTF_8));
 
-    MavenSigning.SigningMethod signingMethod = signingMetadata.signingMethod;
-    if (signingMethod.equals(MavenSigning.SigningMethod.GPG)) {
-      uploads.add(
-          upload(String.format("%s%s.asc", base, append), credentials, gpg_sign(item), executor));
-    } else if (signingMethod.equals(MavenSigning.SigningMethod.PGP)) {
-      uploads.add(
-          upload(
-              String.format("%s%s.asc", base, append),
-              credentials,
-              in_memory_pgp_sign(
-                  item, signingMetadata.getSigningKey(), signingMetadata.getSigningPassword()),
-              executor));
-    }
+          Path sha256 = Files.createTempFile(item.getFileName().toString(), ".sha256");
+          Files.write(sha256, toSha256(toHash).getBytes(UTF_8));
 
-    return CompletableFuture.allOf(uploads.toArray(new CompletableFuture<?>[0]));
+          Path sha512 = Files.createTempFile(item.getFileName().toString(), ".sha512");
+          Files.write(sha512, toSha512(toHash).getBytes(UTF_8));
+
+          hashUploads.add(upload(String.format("%s%s.md5", base, append), credentials, md5, executor));
+          hashUploads.add(upload(String.format("%s%s.sha1", base, append), credentials, sha1, executor));
+          hashUploads.add(upload(String.format("%s%s.sha256", base, append), credentials, sha256, executor));
+          hashUploads.add(upload(String.format("%s%s.sha512", base, append), credentials, sha512, executor));
+        }
+
+        MavenSigning.SigningMethod signingMethod = signingMetadata.signingMethod;
+        if (signingMethod.equals(MavenSigning.SigningMethod.GPG)) {
+          hashUploads.add(
+              upload(String.format("%s%s.asc", base, append), credentials, gpg_sign(item), executor));
+        } else if (signingMethod.equals(MavenSigning.SigningMethod.PGP)) {
+          hashUploads.add(
+              upload(
+                  String.format("%s%s.asc", base, append),
+                  credentials,
+                  in_memory_pgp_sign(
+                      item, signingMetadata.getSigningKey(), signingMetadata.getSigningPassword()),
+                  executor));
+        }
+
+        return CompletableFuture.allOf(hashUploads.toArray(new CompletableFuture<?>[0]));
+      } catch (IOException | InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    });
   }
 
   private static String toSha1(byte[] toHash) {

@@ -10,7 +10,7 @@ java_library(
     ),
     data = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle/data:gradle_build_templates",
-        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle/plugin:plugin-single-jar",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle/plugin:plugin.jar",
         "@bazel_tools//tools/jdk:host_jdk",
         "@gradle//:distribution",
         "@gradle//:gradle-bin/README",
@@ -35,6 +35,10 @@ java_library(
         ),
         artifact(
             "org.codehaus.plexus:plexus-utils",
+            repository_name = "rules_jvm_external_deps",
+        ),
+        artifact(
+            "org.codehaus.plexus:plexus-xml",
             repository_name = "rules_jvm_external_deps",
         ),
         artifact(
