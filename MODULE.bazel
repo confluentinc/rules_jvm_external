@@ -46,6 +46,7 @@ maven.install(
         "com.google.code.gson:gson:2.13.1",
         "com.google.googlejavaformat:google-java-format:1.27.0",
         "com.google.guava:guava:33.4.8-jre",
+        "commons-logging:commons-logging:1.2",
         "org.apache.maven:maven-artifact:%s" % _MAVEN_VERSION,
         "org.apache.maven:maven-core:%s" % _MAVEN_VERSION,
         "org.apache.maven:maven-model:%s" % _MAVEN_VERSION,
