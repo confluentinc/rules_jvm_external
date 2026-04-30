@@ -1,6 +1,6 @@
 load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
+load("@toml.bzl", "toml")
 load("//private/extensions:maven.bzl", "process_gradle_versions_file")
-load("//private/lib:toml_parser.bzl", "parse_toml")
 
 def _simple_string_notation_impl(ctx):
     env = unittest.begin(ctx)
@@ -10,7 +10,7 @@ def _simple_string_notation_impl(ctx):
 commons-lang = "org.apache.commons:commons-lang3:3.12.0"
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 1, len(artifacts))
@@ -31,7 +31,7 @@ def _map_with_module_and_inline_version_impl(ctx):
 guava = { module = "com.google.guava:guava", version = "32.1.0-jre" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 1, len(artifacts))
@@ -55,7 +55,7 @@ junit = "5.10.0"
 junit-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 1, len(artifacts))
@@ -76,7 +76,7 @@ def _map_with_module_no_version_impl(ctx):
 guava-from-bom = { module = "com.google.guava:guava" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 1, len(artifacts))
@@ -97,7 +97,7 @@ def _map_with_group_name_and_inline_version_impl(ctx):
 androidx-core = { group = "androidx.core", name = "core-ktx", version = "1.12.0" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 1, len(artifacts))
@@ -121,7 +121,7 @@ kotlin = "1.9.0"
 kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 1, len(artifacts))
@@ -145,7 +145,7 @@ compose = "1.5.0"
 compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "compose" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 1, len(artifacts))
@@ -166,7 +166,7 @@ def _map_with_module_and_packaging_impl(ctx):
 play-services = { module = "com.google.android.gms:play-services-tasks", package = "aar", version = "18.1.0" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 1, len(artifacts))
@@ -188,7 +188,7 @@ def _map_with_group_name_and_packaging_impl(ctx):
 android-material = { group = "com.google.android.material", name = "material", version = "1.10.0", package = "aar" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 1, len(artifacts))
@@ -211,7 +211,7 @@ guava-bom = { module = "com.google.guava:guava-bom", version = "32.1.0-jre" }
 guava = { module = "com.google.guava:guava", version = "32.1.0-jre" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, ["com.google.guava:guava-bom"])
 
     asserts.equals(env, 1, len(artifacts))
@@ -246,7 +246,7 @@ junit-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "jun
 kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
 """
 
-    parsed = parse_toml(toml_content)
+    parsed = toml.decode(toml_content)
     artifacts, boms = process_gradle_versions_file(parsed, [])
 
     asserts.equals(env, 4, len(artifacts))
@@ -255,6 +255,48 @@ kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", versio
     return unittest.end(env)
 
 multiple_libraries_test = unittest.make(_multiple_libraries_impl)
+
+def _extra_fields_impl(ctx):
+    env = unittest.begin(ctx)
+
+    toml_content = """\
+[versions]
+misk = "1.0.0"
+
+[libraries]
+com_clickhouse_clickhouse_jdbc_all = { module = "com.clickhouse:clickhouse-jdbc", version = "0.9.2", classifier = "all", force_version = "True" }
+com_squareup_misk_misk_audit_client_test_fixtures = { module = "com.squareup.misk:misk-audit-client", version.ref = "misk", classifier = "test-fixtures", exclusions = "['*:*']", force_version = "false" }
+com_yammer_metrics_metrics_servlet = { module = "com.yammer.metrics:metrics-servlet", version = "2.2.0", exclusions = "['com.fasterxml.jackson.core:jackson-databind']" }
+"""
+
+    parsed = toml.decode(toml_content)
+    artifacts, boms = process_gradle_versions_file(parsed, [])
+
+    asserts.equals(env, 3, len(artifacts))
+    asserts.equals(env, 0, len(boms))
+
+    asserts.equals(env, "com.clickhouse", artifacts[0].group)
+    asserts.equals(env, "clickhouse-jdbc", artifacts[0].artifact)
+    asserts.equals(env, "0.9.2", artifacts[0].version)
+    asserts.equals(env, "all", artifacts[0].classifier)
+    asserts.equals(env, True, artifacts[0].force_version)
+
+    asserts.equals(env, "com.squareup.misk", artifacts[1].group)
+    asserts.equals(env, "misk-audit-client", artifacts[1].artifact)
+    asserts.equals(env, "1.0.0", artifacts[1].version)
+    asserts.equals(env, "test-fixtures", artifacts[1].classifier)
+    asserts.equals(env, [{"group": "*", "artifact": "*"}], artifacts[1].exclusions)
+    asserts.equals(env, False, artifacts[1].force_version)
+
+    asserts.equals(env, "com.yammer.metrics", artifacts[2].group)
+    asserts.equals(env, "metrics-servlet", artifacts[2].artifact)
+    asserts.equals(env, "2.2.0", artifacts[2].version)
+    asserts.equals(env, [{"group": "com.fasterxml.jackson.core", "artifact": "jackson-databind"}], artifacts[2].exclusions)
+    asserts.equals(env, False, getattr(artifacts[2], "force_version", False))
+
+    return unittest.end(env)
+
+extra_fields_test = unittest.make(_extra_fields_impl)
 
 def version_catalogs_test_suite():
     unittest.suite(
@@ -270,4 +312,5 @@ def version_catalogs_test_suite():
         map_with_group_name_and_packaging_test,
         bom_handling_test,
         multiple_libraries_test,
+        extra_fields_test,
     )

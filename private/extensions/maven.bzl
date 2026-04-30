@@ -1,5 +1,6 @@
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_skylib//lib:new_sets.bzl", "sets")
+load("@toml.bzl", "toml")
 load("//:specs.bzl", "parse", _json = "json")
 load("//private:compat_repository.bzl", "compat_repository")
 load(
@@ -9,7 +10,6 @@ load(
     "strip_packaging_and_classifier_and_version",
 )
 load("//private/lib:coordinates.bzl", "to_external_form", "to_key", "unpack_coordinates")
-load("//private/lib:toml_parser.bzl", "parse_toml")
 load("//private/rules:coursier.bzl", "DEFAULT_AAR_IMPORT_LABEL", "coursier_fetch", "pinned_coursier_fetch")
 load("//private/rules:maven_version.bzl", "compare_maven_versions")
 load("//private/rules:unpinned_maven_pin_command_alias.bzl", "unpinned_maven_pin_command_alias")
@@ -148,9 +148,9 @@ amend_artifact = tag_class(
     attrs = {
         "name": attr.string(default = DEFAULT_NAME),
         "coordinates": attr.string(doc = "Coordinates of the artifact to amend. Only `group:artifact` are used for matching.", mandatory = True),
-        "force_version": attr.bool(default = False),
-        "neverlink": attr.bool(),
-        "testonly": attr.bool(),
+        "force_version": attr.string(values = ["on", "off", "true", "false", ""], default = ""),
+        "neverlink": attr.string(values = ["on", "off", "true", "false", ""], default = ""),
+        "testonly": attr.string(values = ["on", "off", "true", "false", ""], default = ""),
         "exclusions": attr.string_list(doc = "Maven artifact tuples, in `artifactId:groupId` format", allow_empty = True),
     },
 )
@@ -277,6 +277,13 @@ def _deduplicate_artifacts_with_root_priority(name, root_artifacts, bazel_dep_to
 
     return root_artifacts + filtered_non_root_artifacts
 
+def _get_tri_state_bool(amend_val, original_val):
+    if amend_val in ["true", "on"]:
+        return True
+    if amend_val in ["false", "off"]:
+        return False
+    return original_val
+
 def _amend_artifact(original_artifact, amend):
     """Apply amendments to an artifact struct, returning a new amended struct."""
 
@@ -288,15 +295,16 @@ def _amend_artifact(original_artifact, amend):
         final_exclusions = existing_exclusions + new_exclusions
 
     # Create new struct with amendments applied
+
     return struct(
         group = original_artifact.group,
         artifact = original_artifact.artifact,
         version = getattr(original_artifact, "version", None),
         packaging = getattr(original_artifact, "packaging", None),
         classifier = getattr(original_artifact, "classifier", None),
-        force_version = amend.force_version if amend.force_version else getattr(original_artifact, "force_version", None),
-        neverlink = amend.neverlink if amend.neverlink else getattr(original_artifact, "neverlink", None),
-        testonly = amend.testonly if amend.testonly else getattr(original_artifact, "testonly", None),
+        force_version = _get_tri_state_bool(amend.force_version, getattr(original_artifact, "force_version", None)),
+        neverlink = _get_tri_state_bool(amend.neverlink, getattr(original_artifact, "neverlink", None)),
+        testonly = _get_tri_state_bool(amend.testonly, getattr(original_artifact, "testonly", None)),
         exclusions = final_exclusions if final_exclusions else None,
     )
 
@@ -337,7 +345,17 @@ def process_gradle_versions_file(parsed, bom_modules):
                     fail("Unable to resolve version.ref %s" % value["version.ref"])
                 coords += ":%s" % version
             elif "version" in value.keys():
-                coords += ":%s" % value["version"]
+                raw_version = value["version"]
+                if type(raw_version) == "string":
+                    coords += ":%s" % value["version"]
+                elif type(raw_version) == "dict":
+                    version_ref = raw_version.get("ref", None)
+                    if not version_ref:
+                        fail("Unable to find version ref in", value)
+                    version = parsed.get("versions", {}).get(version_ref)
+                    if not version:
+                        fail("Unable to resolve version ref", value)
+                    coords += ":%s" % version
 
             # Handle packaging (e.g., "aar" for Android libraries)
             # Note: Gradle uses "package" but we'll check common variants
@@ -354,7 +372,25 @@ def process_gradle_versions_file(parsed, bom_modules):
         if module_id in bom_modules:
             boms.append(unpack_coordinates(coords))
         else:
-            artifacts.append(unpack_coordinates(coords))
+            artifact = unpack_coordinates(coords)
+
+            if type(value) == "dict":
+                artifact_dict = {
+                    "group": artifact.group,
+                    "artifact": artifact.artifact,
+                    "version": getattr(artifact, "version", None),
+                    "packaging": getattr(artifact, "packaging", None),
+                    "classifier": getattr(artifact, "classifier", None),
+                }
+                if "classifier" in value.keys():
+                    artifact_dict["classifier"] = value["classifier"]
+                if "exclusions" in value.keys():
+                    artifact_dict["exclusions"] = _add_exclusions(json.decode(value["exclusions"].replace("'", '"')))
+                if "force_version" in value.keys():
+                    artifact_dict["force_version"] = (value["force_version"].lower() == "true")
+                artifact = struct(**artifact_dict)
+
+            artifacts.append(artifact)
 
     return artifacts, boms
 
@@ -391,7 +427,7 @@ def _process_module_tags(mctx):
             repo = target_repos.get(from_toml_tag.name, {})
 
             content = mctx.read(mctx.path(from_toml_tag.libs_versions_toml))
-            parsed = parse_toml(content)
+            parsed = toml.decode(content)
 
             (new_artifacts, new_boms) = process_gradle_versions_file(parsed, from_toml_tag.bom_modules)
 
@@ -585,7 +621,7 @@ def maven_impl(mctx):
         root_artifacts = root_repo.get("artifacts", [])
         bazel_dep_to_non_root_artifacts = non_root_repo.get("bazel_dep_to_artifacts", {})
         root_boms = root_repo.get("boms", [])
-        bazel_dep_to_non_root_boms = non_root_repo.get("bazel_dep_to_boms", [])
+        bazel_dep_to_non_root_boms = non_root_repo.get("bazel_dep_to_boms", {})
 
         if repo_name in root_module_repos.keys():
             known_contributing_modules = root_repo.get("known_contributing_modules", sets.make())
@@ -735,7 +771,7 @@ def maven_impl(mctx):
                 additional_coursier_options = repo.get("additional_coursier_options"),
             )
         else:
-            workspace_prefix = "@@" if bazel_features.external_deps.is_bzlmod_enabled else "@"
+            workspace_prefix = "@@"
 
             # Only the coursier resolver allows the lock file to be omitted.
             unpinned_maven_pin_command_alias(

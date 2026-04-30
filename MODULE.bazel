@@ -1,49 +1,52 @@
 module(
     name = "rules_jvm_external",
-    version = "6.9",
+    version = "7.0",
     bazel_compatibility = [">=7.0.0"],
 )
 
-bazel_dep(name = "rules_android", version = "0.6.6")
-bazel_dep(name = "bazel_features", version = "1.30.0")
-bazel_dep(name = "bazel_skylib", version = "1.7.1")
-bazel_dep(name = "package_metadata", version = "0.0.3")
-bazel_dep(name = "platforms", version = "0.0.11")
+bazel_dep(name = "rules_android", version = "0.7.1")
+bazel_dep(name = "bazel_features", version = "1.33.0")
+bazel_dep(name = "bazel_skylib", version = "1.8.1")
+bazel_dep(name = "package_metadata", version = "0.0.7")
+bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_license", version = "1.0.0")
-bazel_dep(name = "rules_java", version = "8.13.0")
-bazel_dep(name = "rules_kotlin", version = "2.1.3")
-bazel_dep(name = "rules_shell", version = "0.4.1")
+bazel_dep(name = "rules_java", version = "9.3.0")
+bazel_dep(name = "rules_kotlin", version = "2.2.2")
+bazel_dep(name = "rules_shell", version = "0.6.1")
+bazel_dep(name = "toml.bzl", version = "0.3.0")
 
 bazel_dep(name = "aspect_bazel_lib", version = "2.20.0", dev_dependency = True)
+bazel_dep(name = "protobuf", version = "33.4", dev_dependency = True)
 bazel_dep(name = "stardoc", version = "0.7.2", dev_dependency = True, repo_name = "io_bazel_stardoc")
 
-# Remove this once rules_android has rolled out official Bzlmod support
-remote_android_extensions = use_extension("@bazel_tools//tools/android:android_extensions.bzl", "remote_android_tools_extensions")
-use_repo(remote_android_extensions, "android_gmaven_r8", "android_tools")
+# Use compatibility_proxy for Bazel 7 compatibility with rules_java 9.x
+# For Bazel 8+, this uses rules_java implementations
+# For Bazel 7, this falls back to native Java rules
+compat_proxy = use_extension("@rules_java//java:rules_java_deps.bzl", "compatibility_proxy")
+use_repo(compat_proxy, "compatibility_proxy")
 
 maven = use_extension(":extensions.bzl", "maven")
 
 _MAVEN_VERSION = "3.9.10"
 
-_MAVEN_RESOLVER_VERSION = "1.9.23"
+_MAVEN_RESOLVER_VERSION = "1.9.27"
 
 _GRADLE_VERSION = "8.13"
 
-# NOTE: Please keep any changes to this maven.install in sync with the
-# definition in repositories.bzl
 maven.install(
     name = "rules_jvm_external_deps",
     artifacts = [
         "ch.qos.logback:logback-classic:1.5.23",
         "com.github.jknack:handlebars:4.3.1",
-        "com.google.auth:google-auth-library-credentials:1.23.0",
-        "com.google.auth:google-auth-library-oauth2-http:1.23.0",
-        "com.google.cloud:google-cloud-core:2.40.0",
-        "com.google.cloud:google-cloud-storage:2.40.1",
+        "com.google.auth:google-auth-library-credentials:1.35.0",
+        "com.google.auth:google-auth-library-oauth2-http:1.35.0",
+        "com.google.cloud:google-cloud-core:2.57.0",
+        "com.google.cloud:google-cloud-storage:2.53.0",
         "com.google.code.findbugs:jsr305:3.0.2",
-        "com.google.code.gson:gson:2.11.0",
-        "com.google.googlejavaformat:google-java-format:1.22.0",
-        "com.google.guava:guava:33.2.1-jre",
+        "com.google.code.gson:gson:2.13.1",
+        "com.google.googlejavaformat:google-java-format:1.27.0",
+        "com.google.guava:guava:33.4.8-jre",
+        "commons-logging:commons-logging:1.2",
         "org.apache.maven:maven-artifact:%s" % _MAVEN_VERSION,
         "org.apache.maven:maven-core:%s" % _MAVEN_VERSION,
         "org.apache.maven:maven-model:%s" % _MAVEN_VERSION,
@@ -59,18 +62,19 @@ maven.install(
         "org.apache.maven.resolver:maven-resolver-transport-file:%s" % _MAVEN_RESOLVER_VERSION,
         "org.apache.maven.resolver:maven-resolver-transport-http:%s" % _MAVEN_RESOLVER_VERSION,
         "org.apache.maven.resolver:maven-resolver-util:%s" % _MAVEN_RESOLVER_VERSION,
-        "org.bouncycastle:bcprov-jdk15on:1.68",
-        "org.bouncycastle:bcpg-jdk15on:1.68",
+        "org.bouncycastle:bcprov-jdk15on:1.70",
+        "org.bouncycastle:bcpg-jdk15on:1.70",
         "org.codehaus.plexus:plexus-cipher:2.1.0",
         "org.codehaus.plexus:plexus-sec-dispatcher:2.0",
-        "org.codehaus.plexus:plexus-utils:3.5.1",
-        "org.fusesource.jansi:jansi:2.4.1",
+        "org.codehaus.plexus:plexus-utils:4.0.2",
+        "org.codehaus.plexus:plexus-xml:3.0.1",
+        "org.fusesource.jansi:jansi:2.4.2",
         "org.gradle:gradle-tooling-api:%s" % _GRADLE_VERSION,
         "org.slf4j:jul-to-slf4j:2.0.17",
         "org.slf4j:log4j-over-slf4j:2.0.17",
         "org.slf4j:slf4j-simple:2.0.17",
-        "software.amazon.awssdk:s3:2.26.12",
-        "software.amazon.awssdk:sdk-core:2.26.12",
+        "software.amazon.awssdk:s3:2.34.0",
+        "software.amazon.awssdk:sdk-core:2.34.0",
     ],
     fetch_sources = True,
     lock_file = "//:rules_jvm_external_deps_install.json",
@@ -80,11 +84,7 @@ maven.install(
     ],
     strict_visibility = True,
 )
-use_repo(
-    maven,
-    "rules_jvm_external_deps",
-    "unpinned_rules_jvm_external_deps",
-)
+use_repo(maven, "rules_jvm_external_deps")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
@@ -143,19 +143,6 @@ http_file(
 ############# Dev dependencies below here
 
 bazel_dep(
-    name = "protobuf",
-    # Note: In MODULE.bazel, we use a version >= 29.1 to avoid polluting the
-    # default maven repo name with protobuf's dependencies.
-    # https://github.com/protocolbuffers/protobuf/pull/19477
-    # However, in WORKSPACE, we use version 21.7 since version 27.2 doesn't work
-    # with Bazel 5.x.
-    # https://github.com/protocolbuffers/protobuf/commit/a80daa2a2caaaac9ebe9ae6bb1b639c2771c5c55
-    # This should be ok because we only use protobuf to pull in the google/protobuf/wrappers.proto
-    # for testing.
-    version = "31.1",
-    dev_dependency = True,
-)
-bazel_dep(
     name = "bzlmod_lock_files",
     version = "0.0.0",
     dev_dependency = True,
@@ -173,7 +160,7 @@ dev_maven = use_extension(
 dev_maven.install(
     artifacts = [
         "com.google.guava:guava:33.5.0-jre",
-        "com.google.protobuf:protobuf-java:4.31.0",
+        "com.google.protobuf:protobuf-java:4.33.4",
         "org.hamcrest:hamcrest-core:2.1",
         "io.netty:netty-tcnative-boringssl-static:2.0.61.Final",
     ],
@@ -183,6 +170,37 @@ dev_maven.install(
     ],
     lock_file = "@rules_jvm_external//:maven_install.json",
     resolver = "coursier",
+)
+dev_maven.install(
+    name = "amend_artifacts",
+    artifacts = [
+        "com.google.guava:guava:31.1-jre",
+        "org.apache.commons:commons-lang3:3.12.0",
+        "org.slf4j:slf4j-api:1.7.32",
+    ],
+    lock_file = "//tests/custom_maven_install:amend_artifacts_install.json",
+)
+
+# Toggle the `testonly` flag on guava
+dev_maven.amend_artifact(
+    name = "amend_artifacts",
+    testonly = "on",
+    coordinates = "com.google.guava:guava",
+)
+dev_maven.amend_artifact(
+    name = "amend_artifacts",
+    testonly = "off",
+    coordinates = "com.google.guava:guava",
+)
+dev_maven.amend_artifact(
+    name = "amend_artifacts",
+    testonly = "true",
+    coordinates = "org.apache.commons:commons-lang3",
+)
+dev_maven.amend_artifact(
+    name = "amend_artifacts",
+    coordinates = "org.slf4j:slf4j-api",
+    neverlink = "on",
 )
 dev_maven.install(
     name = "duplicate_version_warning",
@@ -275,6 +293,13 @@ dev_maven.install(
         "https://repo1.maven.org/maven2",
         "https://maven.google.com",
     ],
+    # The TOML file includes AAR artifacts (e.g. play-services-tasks) which
+    # pull in transitive AAR deps like androidx.fragment:fragment. On Bazel 8+
+    # the native aar_import no longer exists so the Starlark version from
+    # rules_android is used automatically. On Bazel 7 we must opt in
+    # explicitly, otherwise the native aar_import requires an Android SDK
+    # toolchain that is not registered in this module.
+    use_starlark_android_rules = True,
 )
 dev_maven.from_toml(
     name = "from_files",
@@ -285,7 +310,7 @@ dev_maven.from_toml(
 )
 dev_maven.amend_artifact(
     name = "from_files",
-    testonly = True,
+    testonly = "true",
     coordinates = "org.junit.jupiter:junit-jupiter-api",
 )
 dev_maven.install(
@@ -303,7 +328,7 @@ dev_maven.install(
 dev_maven.install(
     name = "java_export_exclusion_testing",
     artifacts = [
-        "com.google.protobuf:protobuf-java:4.31.1",
+        "com.google.protobuf:protobuf-java:4.33.4",
     ],
     lock_file = "//tests/custom_maven_install:java_export_exclusion_testing_install.json",
 )
@@ -453,6 +478,27 @@ dev_maven.install(
     name = "maven_install_in_custom_location",
     artifacts = ["com.google.guava:guava:27.0-jre"],
     lock_file = "//tests/custom_maven_install:maven_install.json",
+)
+dev_maven.install(
+    name = "multi_repo_hash",
+    artifacts = ["junit:junit:4.13.2"],
+    fail_if_repin_required = True,
+    lock_file = "//tests/custom_maven_install:multi_repo_hash_install.json",
+    repositories = [
+        "https://repo1.maven.org/maven2/",
+        "https://repo.maven.apache.org/maven2/",
+    ],
+    resolver = "maven",
+)
+dev_maven.install(
+    name = "legacy_multi_repo_hash",
+    artifacts = ["junit:junit:4.13.2"],
+    fail_if_repin_required = True,
+    lock_file = "//tests/custom_maven_install:legacy_multi_repo_hash_install.json",
+    repositories = [
+        "https://repo1.maven.org/maven2/",
+        "https://repo.maven.apache.org/maven2/",
+    ],
 )
 dev_maven.install(
     # This name matches the one in `tests/integration/bzlmod_lock_files`
@@ -930,7 +976,7 @@ dev_maven.install(
 dev_maven.amend_artifact(
     name = "root_wins",
     coordinates = "io.netty:netty-buffer",
-    force_version = True,
+    force_version = "true",
 )
 
 bazel_dep(name = "root_wins_layer", version = "0.0.0", dev_dependency = True)
@@ -971,6 +1017,7 @@ dev_maven.override(
 # want it to
 use_repo(
     dev_maven,
+    "amend_artifacts",
     "duplicate_version_warning",
     "duplicate_version_warning_same_version",
     "exclusion_testing",
@@ -1074,6 +1121,10 @@ use_repo(
     "unpinned_v1_lock_file_format",
     "v1_lock_file_format",
     "version_interval_testing",
+    "multi_repo_hash",
+    "unpinned_multi_repo_hash",
+    "legacy_multi_repo_hash",
+    "unpinned_legacy_multi_repo_hash",
 )
 
 http_file(
