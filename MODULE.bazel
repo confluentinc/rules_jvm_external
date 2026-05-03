@@ -136,8 +136,8 @@ http_file(
 
 http_file(
     name = "buildifier-macos-x86_64",
-    sha256 = "687c49c318fb655970cf716eed3c7bfc9caeea4f2931a2fd36593c458de0c537",
-    urls = ["https://github.com/bazelbuild/buildtools/releases/download/v7.1.2/buildifier-darwin-amd64"],
+    sha256 = "31de189e1a3fe53aa9e8c8f74a0309c325274ad19793393919e1ca65163ca1a4",
+    urls = ["https://github.com/bazelbuild/buildtools/releases/download/v8.5.1/buildifier-darwin-amd64"],
 )
 
 ############# Dev dependencies below here
