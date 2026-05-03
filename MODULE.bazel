@@ -64,7 +64,7 @@ maven.install(
         "org.apache.maven.resolver:maven-resolver-util:%s" % _MAVEN_RESOLVER_VERSION,
         "org.bouncycastle:bcprov-jdk15on:1.70",
         "org.bouncycastle:bcpg-jdk15on:1.70",
-        "org.codehaus.plexus:plexus-cipher:2.1.0",
+        "org.codehaus.plexus:plexus-cipher:3.0.0",
         "org.codehaus.plexus:plexus-sec-dispatcher:2.0",
         "org.codehaus.plexus:plexus-utils:4.0.2",
         "org.codehaus.plexus:plexus-xml:3.0.1",
