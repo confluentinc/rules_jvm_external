@@ -31,7 +31,7 @@ load(
     "COURSIER_CLI_SHA256",
 )
 load("//private/lib:coordinates.bzl", "to_key", "unpack_coordinates")
-load("//private/lib:urls.bzl", "remove_auth_from_url")
+load("//private/lib:urls.bzl", "extract_netrc_from_auth_url", "remove_auth_from_url", "scheme_and_host")
 load("//private/rules:v1_lock_file.bzl", "v1_lock_file")
 load("//private/rules:v3_lock_file.bzl", "v2_lock_file", "v3_lock_file")
 
@@ -1195,6 +1195,47 @@ def remove_prefix(s, prefix):
         return s[len(prefix):]
     return s
 
+def _host_only(url):
+    """Returns the bare host[:port] of a url, without scheme or `user:pass@` userinfo.
+
+    Used to match a candidate mirror url against a netrc `machine` entry.
+    """
+    scheme_host = scheme_and_host(url)
+    if not scheme_host:
+        return ""
+    return scheme_host[scheme_host.find("://") + 3:]
+
+def _mirror_probe_credentials(repository_ctx, repositories):
+    """Builds a `host[:port] -> (login, password)` map for authenticating mirror probes.
+
+    Sources, in increasing precedence: the user's `~/.netrc`, inline `user:pass@` userinfo
+    in a repository url, and an explicit per-repository `credentials` entry. Probes that hit
+    a host with no known credential are sent unauthenticated.
+    """
+    creds = {}
+    home_netrc = get_home_netrc_contents(repository_ctx)
+    if home_netrc:
+        for machine, props in utils.parse_netrc(home_netrc).items():
+            if machine and "login" in props:
+                creds[machine] = (props["login"], props.get("password", ""))
+    for r in repositories:
+        repo_url = r["repo_url"]
+        if repo_url == "m2Local":
+            continue
+        inline = extract_netrc_from_auth_url(repo_url)
+        if inline:
+            creds[inline["machine"]] = (inline["login"], inline.get("password", ""))
+        if "credentials" in r:
+            creds[_host_only(repo_url)] = (r["credentials"]["user"], r["credentials"]["password"])
+    return creds
+
+def _mirror_probe_auth(probe_url, host_creds):
+    """Returns the `auth` dict for a single `repository_ctx.download` probe."""
+    login_password = host_creds.get(_host_only(probe_url))
+    if login_password == None:
+        return {}
+    return {probe_url: {"type": "basic", "login": login_password[0], "password": login_password[1]}}
+
 def _coursier_fetch_impl(repository_ctx):
     # Not using maven_install.json, so we resolve and fetch from scratch.
     # This takes significantly longer as it doesn't rely on any local
@@ -1264,6 +1305,14 @@ def _coursier_fetch_impl(repository_ctx):
     )
 
     files_to_inspect = []
+
+    # Per-artifact repository membership: by default we probe each configured repository and
+    # record only those that actually serve the artifact (fixes the 404-warning noise of #349).
+    # Set RJE_VERIFY_MIRRORS=false to restore the legacy "replicate across every repo" behaviour.
+    verify_mirrors = repository_ctx.os.environ.get("RJE_VERIFY_MIRRORS", "true").lower() != "false"
+    probe_creds = _mirror_probe_credentials(repository_ctx, repositories) if verify_mirrors else {}
+    pending_probes = []
+    probe_index = [0]
 
     # Also, replace '//' with '/', otherwise parsing of the file path for the
     # coursier cache will fail if variables like HOME or COURSIER_CACHE have a
@@ -1345,24 +1394,13 @@ def _coursier_fetch_impl(repository_ctx):
 
         artifact.update({"url": primary_url})
 
-        # The repository for the primary_url has to be one of the repositories provided through
-        # maven_install. Since Maven artifact URLs are standardized, we can make the `http_file`
-        # targets more robust by replicating the primary url for each specified repository url.
-        #
-        # It does not matter if the artifact is on a repository or not, since http_file takes
-        # care of 404s.
-        #
-        # If the artifact does exist, Bazel's HttpConnectorMultiplexer enforces the SHA-256 checksum
-        # is correct. By applying the SHA-256 checksum verification across all the mirrored files,
-        # we get increased robustness in the case where our primary artifact has been tampered with,
-        # and we somehow ended up using the tampered checksum. Attackers would need to tamper *all*
-        # mirrored artifacts.
-        #
-        # See https://github.com/bazelbuild/bazel/blob/77497817b011f298b7f3a1138b08ba6a962b24b8/src/main/java/com/google/devtools/build/lib/bazel/repository/downloader/HttpConnectorMultiplexer.java#L103
-        # for more information on how Bazel's HTTP multiplexing works.
-        #
-        # TODO(https://github.com/bazelbuild/rules_jvm_external/issues/186): Make this work with
-        # basic auth.
+        # The primary_url is the repository Coursier actually downloaded from, so it is known
+        # to serve this artifact. Maven artifact paths are standardized, so the same artifact
+        # *may* also be available from the other configured repositories -- listing those as
+        # mirror_urls lets http_file fall back if the primary is unreachable, and makes Bazel's
+        # HttpConnectorMultiplexer enforce the SHA-256 across every mirror (an attacker would
+        # have to tamper all of them). See:
+        # https://github.com/bazelbuild/bazel/blob/77497817b011f298b7f3a1138b08ba6a962b24b8/src/main/java/com/google/devtools/build/lib/bazel/repository/downloader/HttpConnectorMultiplexer.java#L103
         repository_urls = []
         for r in repositories:
             # filter out m2Local since it's not a valid mirror url
@@ -1370,14 +1408,60 @@ def _coursier_fetch_impl(repository_ctx):
                 repository_urls.append(r["repo_url"].rstrip("/"))
         primary_artifact_path = infer_artifact_path_from_primary_and_repos(primary_url, repository_urls)
 
-        mirror_urls = [url + "/" + primary_artifact_path for url in repository_urls]
-        if primary_url in mirror_urls:
-            # http_file tries URLs in order, so putting the URL that actually worked first
-            # minimizes repository fetch 404s. See: https://github.com/bazelbuild/rules_jvm_external/issues/349
-            mirror_urls = [primary_url] + [url for url in mirror_urls if url != primary_url]
-        artifact.update({"mirror_urls": mirror_urls})
+        if primary_artifact_path == None:
+            # primary_url doesn't prefix-match any configured repo (e.g. a trailing-slash or
+            # `/maven` vs `/maven2` drift), so we can't synthesise mirror urls. Record only the
+            # verified primary rather than guess.
+            artifact.update({"mirror_urls": [primary_url]})
+        elif not verify_mirrors:
+            # Legacy behaviour: replicate the primary across every configured repo and let
+            # http_file's 404 handling sort it out at fetch time (the source of #349's noise).
+            mirror_urls = [url + "/" + primary_artifact_path for url in repository_urls]
+            if primary_url in mirror_urls:
+                # http_file tries URLs in order, so the verified primary goes first.
+                mirror_urls = [primary_url] + [url for url in mirror_urls if url != primary_url]
+            artifact.update({"mirror_urls": mirror_urls})
+        else:
+            # Record the verified primary first, then asynchronously probe every *other*
+            # configured repo and keep only those that actually serve this artifact. Probes use
+            # a Range request so a hit transfers ~1 byte; they are resolved in a second pass once
+            # the loop has fired them all (so they run concurrently via Bazel's download pool).
+            ordered = [primary_url] + [
+                url + "/" + primary_artifact_path
+                for url in repository_urls
+                if url + "/" + primary_artifact_path != primary_url
+            ]
+            tokens = {}
+            for cand in ordered:
+                if cand == primary_url:
+                    continue
+                probe_url = remove_auth_from_url(cand)
+                tokens[cand] = repository_ctx.download(
+                    probe_url,
+                    "_mirror_probes/probe_%d" % probe_index[0],
+                    allow_fail = True,
+                    block = False,
+                    headers = {"Range": "bytes=0-0"},
+                    auth = _mirror_probe_auth(probe_url, probe_creds),
+                )
+                probe_index[0] += 1
+
+            # Provisional value; overwritten in the resolve pass below.
+            artifact.update({"mirror_urls": [primary_url]})
+            pending_probes.append(struct(artifact = artifact, primary = primary_url, ordered = ordered, tokens = tokens))
 
         files_to_inspect.append(repository_ctx.path(artifact["file"]))
+
+    # Resolve the asynchronous mirror probes. Each token resolves to a 2xx (artifact present)
+    # or a failure (404/transport error/auth); only present mirrors are kept, primary first.
+    for probe in pending_probes:
+        verified = [probe.primary]
+        for cand in probe.ordered:
+            if cand != probe.primary and probe.tokens[cand].wait().success:
+                verified.append(cand)
+        probe.artifact.update({"mirror_urls": verified})
+    if pending_probes:
+        repository_ctx.delete("_mirror_probes")
 
     hasher_stdout = _execute_with_argsfile(
         repository_ctx,
@@ -1737,6 +1821,7 @@ coursier_fetch = repository_rule(
         "COURSIER_SHA256",
         "COURSIER_URL",
         "RJE_VERBOSE",
+        "RJE_VERIFY_MIRRORS",
         "XDG_CACHE_HOME",
     ],
     implementation = _coursier_fetch_impl,
