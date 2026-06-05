@@ -1736,8 +1736,6 @@ coursier_fetch = repository_rule(
         "COURSIER_OPTS",
         "COURSIER_SHA256",
         "COURSIER_URL",
-        "RJE_COURSIER_USE_JAVA_HOME",
-        "RJE_MAX_THREADS",
         "RJE_VERBOSE",
         "XDG_CACHE_HOME",
     ],
