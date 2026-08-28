@@ -4,20 +4,20 @@ module(
     bazel_compatibility = [">=7.0.0"],
 )
 
-bazel_dep(name = "rules_android", version = "0.7.1")
-bazel_dep(name = "bazel_features", version = "1.33.0")
-bazel_dep(name = "bazel_skylib", version = "1.8.1")
-bazel_dep(name = "package_metadata", version = "0.0.7")
-bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_android", version = "0.7.3")
+bazel_dep(name = "bazel_features", version = "1.51.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.2")
+bazel_dep(name = "package_metadata", version = "0.0.13")
+bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_license", version = "1.0.0")
-bazel_dep(name = "rules_java", version = "9.3.0")
-bazel_dep(name = "rules_kotlin", version = "2.2.2")
-bazel_dep(name = "rules_shell", version = "0.6.1")
-bazel_dep(name = "toml.bzl", version = "0.3.0")
+bazel_dep(name = "rules_java", version = "9.9.0")
+bazel_dep(name = "rules_kotlin", version = "2.4.10")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+bazel_dep(name = "toml.bzl", version = "0.4.1")
 
-bazel_dep(name = "aspect_bazel_lib", version = "2.20.0", dev_dependency = True)
-bazel_dep(name = "protobuf", version = "33.4", dev_dependency = True)
-bazel_dep(name = "stardoc", version = "0.7.2", dev_dependency = True, repo_name = "io_bazel_stardoc")
+bazel_dep(name = "aspect_bazel_lib", version = "2.22.5", dev_dependency = True)
+bazel_dep(name = "protobuf", version = "33.6", dev_dependency = True)
+bazel_dep(name = "stardoc", version = "0.8.1", dev_dependency = True, repo_name = "io_bazel_stardoc")
 
 # Use compatibility_proxy for Bazel 7 compatibility with rules_java 9.x
 # For Bazel 8+, this uses rules_java implementations
@@ -1191,7 +1191,7 @@ http_file(
     ],
 )
 
-bazel_dep(name = "rules_scala", version = "7.0.0")
+bazel_dep(name = "rules_scala", version = "7.2.6")
 single_version_override(
     module_name = "rules_scala",
     patch_strip = 1,
