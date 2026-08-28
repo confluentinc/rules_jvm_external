@@ -67,7 +67,7 @@ maven.install(
         "org.codehaus.plexus:plexus-cipher:2.1.0",
         "org.codehaus.plexus:plexus-sec-dispatcher:2.0",
         "org.codehaus.plexus:plexus-utils:4.0.2",
-        "org.codehaus.plexus:plexus-xml:3.0.1",
+        "org.codehaus.plexus:plexus-xml:4.2.0",
         "org.fusesource.jansi:jansi:2.4.2",
         "org.gradle:gradle-tooling-api:%s" % _GRADLE_VERSION,
         "org.slf4j:jul-to-slf4j:2.0.17",
