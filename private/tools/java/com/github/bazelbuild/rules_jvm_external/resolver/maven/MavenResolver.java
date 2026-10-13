@@ -18,6 +18,7 @@ import com.github.bazelbuild.rules_jvm_external.Coordinates;
 import com.github.bazelbuild.rules_jvm_external.resolver.Conflict;
 import com.github.bazelbuild.rules_jvm_external.resolver.ResolutionRequest;
 import com.github.bazelbuild.rules_jvm_external.resolver.ResolutionResult;
+import com.github.bazelbuild.rules_jvm_external.resolver.ResolvedArtifact;
 import com.github.bazelbuild.rules_jvm_external.resolver.Resolver;
 import com.github.bazelbuild.rules_jvm_external.resolver.events.EventListener;
 import com.github.bazelbuild.rules_jvm_external.resolver.events.LogEvent;
@@ -70,7 +71,6 @@ import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
 import org.eclipse.aether.spi.connector.transport.TransporterFactory;
 import org.eclipse.aether.transfer.ArtifactNotFoundException;
 import org.eclipse.aether.transport.file.FileTransporterFactory;
-import org.eclipse.aether.transport.http.HttpTransporterFactory;
 import org.eclipse.aether.util.artifact.JavaScopes;
 import org.eclipse.aether.util.graph.manager.ClassicDependencyManager;
 import org.eclipse.aether.util.graph.manager.DependencyManagerUtils;
@@ -78,17 +78,21 @@ import org.eclipse.aether.util.graph.transformer.ConflictResolver;
 import org.eclipse.aether.util.graph.traverser.StaticDependencyTraverser;
 import org.eclipse.aether.util.graph.visitor.DependencyGraphDumper;
 import org.eclipse.aether.util.graph.visitor.TreeDependencyVisitor;
+import com.github.bazelbuild.rules_jvm_external.resolver.DownloadService;
+import com.github.bazelbuild.rules_jvm_external.resolver.remote.HttpDownloader;
 
 public class MavenResolver implements Resolver {
 
   private final RemoteRepositoryFactory remoteRepositoryFactory;
   private final int maxThreads;
   private final EventListener listener;
+  private final DownloadService downloadService;
 
   public MavenResolver(Netrc netrc, int maxThreads, EventListener listener) {
     this.remoteRepositoryFactory = new RemoteRepositoryFactory(netrc);
     this.maxThreads = maxThreads;
     this.listener = listener;
+    this.downloadService = HttpDownloader.resolve(netrc, listener);
   }
 
   public String getName() {
@@ -274,7 +278,13 @@ public class MavenResolver implements Resolver {
             getConflicts(request.getDependencies(), resolvedDependencies),
             graphNormalizationResult.getConflicts());
 
-    return new ResolutionResult(graphNormalizationResult.getNormalizedGraph(), conflicts, Map.of());
+    Graph<Coordinates> normalizedGraph = graphNormalizationResult.getNormalizedGraph();
+    Map<Coordinates, ResolvedArtifact> artifacts = new HashMap<>();
+    for (Coordinates node : normalizedGraph.nodes()) {
+      artifacts.put(node, new ResolvedArtifact(node, null));
+    }
+
+    return new ResolutionResult(normalizedGraph, conflicts, artifacts);
   }
 
   private GraphNormalizationResult makeVersionsConsistent(Graph<Coordinates> dependencyGraph) {
@@ -640,11 +650,13 @@ public class MavenResolver implements Resolver {
     return session;
   }
 
-  private static RepositorySystem createRepositorySystem() {
+  private RepositorySystem createRepositorySystem() {
     DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
     locator.addService(RepositoryConnectorFactory.class, BasicRepositoryConnectorFactory.class);
-    locator.addService(TransporterFactory.class, FileTransporterFactory.class);
-    locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
+    locator.setServices(
+        TransporterFactory.class,
+        new HttpDownloaderTransporterFactory(downloadService),
+        new FileTransporterFactory());
 
     return locator.getService(RepositorySystem.class);
   }

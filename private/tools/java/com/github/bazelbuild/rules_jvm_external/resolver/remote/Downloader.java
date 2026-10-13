@@ -14,9 +14,11 @@
 
 package com.github.bazelbuild.rules_jvm_external.resolver.remote;
 
+import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 import com.github.bazelbuild.rules_jvm_external.Coordinates;
+import com.github.bazelbuild.rules_jvm_external.resolver.DownloadService;
 import com.github.bazelbuild.rules_jvm_external.resolver.events.EventListener;
 import com.github.bazelbuild.rules_jvm_external.resolver.netrc.Netrc;
 import com.google.common.hash.Hashing;
@@ -27,6 +29,8 @@ import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -53,7 +57,7 @@ public class Downloader {
   private final Path localRepository;
   private final Set<URI> repos;
   private final boolean cacheDownloads;
-  private final HttpDownloader httpDownloader;
+  private final DownloadService downloadService;
   private final Map<Coordinates, Path> knownPaths;
 
   public Downloader(
@@ -66,7 +70,7 @@ public class Downloader {
     this.localRepository = localRepository;
     this.repos = Set.copyOf(repositories);
     this.cacheDownloads = cacheDownloads;
-    this.httpDownloader = new HttpDownloader(netrc, listener);
+    this.downloadService = HttpDownloader.resolve(netrc, listener);
     this.knownPaths = knownPaths != null ? Map.copyOf(knownPaths) : Map.of();
   }
 
@@ -86,6 +90,13 @@ public class Downloader {
 
     if (result != null) {
       return result;
+    }
+
+    // Source and javadoc jars are optional: many artifacts publish a main jar but no sources jar
+    // (for example the empty com.google.guava:listenablefuture jar Guava depends on). Signal their
+    // absence with null so callers can skip them instead of failing the whole resolution.
+    if (NO_FALLBACK_CLASSIFIERS.contains(coords.getClassifier())) {
+      return null;
     }
 
     // Are we dealing with a packaging dep? Download the `pom.xml` and check
@@ -126,6 +137,9 @@ public class Downloader {
     Path knownPath = knownPaths.get(coordsToUse);
 
     if (knownPath != null && Files.exists(knownPath)) {
+      if (isPomPathForNonPomCoordinates(coordsToUse, knownPath)) {
+        return new DownloadResult(coordsToUse, Set.of(), null, null);
+      }
       pathInRepo = knownPath;
     } else {
       // Check the local cache for the path first
@@ -145,25 +159,20 @@ public class Downloader {
     for (URI repo : this.repos) {
       if (pathInRepo == null) {
         LOG.fine(String.format("Downloading %s%n", coordsToUse));
-        pathInRepo = httpDownloader.get(buildUri(repo, path));
+        pathInRepo = downloadService.get(buildUri(repo, path));
         if (pathInRepo != null) {
           repos.add(repo);
           downloaded = true;
 
           Path cachedResult = localRepository.resolve(path);
           if (cacheDownloads && !cachedResult.equals(pathInRepo)) {
-            try {
-              Files.createDirectories(cachedResult.getParent());
-              Files.copy(pathInRepo, cachedResult, REPLACE_EXISTING);
-            } catch (IOException e) {
-              throw new UncheckedIOException(e);
-            }
+            cacheDownload(pathInRepo, cachedResult);
           }
         }
       } else if (assumedDownloaded) {
         LOG.fine(String.format("Assuming %s is cached%n", coordsToUse));
         downloaded = true;
-      } else if (httpDownloader.head(buildUri(repo, path))) {
+      } else if (downloadService.head(buildUri(repo, path))) {
         LOG.fine(String.format("Checking head of %s%n", coordsToUse));
         repos.add(repo);
         downloaded = true;
@@ -177,6 +186,35 @@ public class Downloader {
     String sha256 = calculateSha256(pathInRepo);
 
     return new DownloadResult(coordsToUse, Set.copyOf(repos), pathInRepo, sha256);
+  }
+
+  // For the Gradle resolver, localRepository is the shared Gradle module cache, which the Gradle
+  // daemon and other worker threads write to concurrently. A plain Files.copy(REPLACE_EXISTING) is
+  // not atomic: REPLACE_EXISTING only removes a target present at check time, so a target created in
+  // the TOCTOU window makes the copy fail with FileAlreadyExistsException. Write to a temp file and
+  // atomically move it into place instead. These artifacts are content-addressed, so a destination
+  // another writer already produced is correct and "already there" is success, not an error.
+  private void cacheDownload(Path source, Path destination) {
+    try {
+      Path parent = destination.getParent();
+      Files.createDirectories(parent);
+
+      Path temp = Files.createTempFile(parent, ".rje-download-", ".tmp");
+      try {
+        Files.copy(source, temp, REPLACE_EXISTING);
+        try {
+          Files.move(temp, destination, ATOMIC_MOVE, REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException e) {
+          Files.move(temp, destination, REPLACE_EXISTING);
+        }
+      } catch (FileAlreadyExistsException e) {
+        // Another writer won the race; the identical artifact is already cached.
+      } finally {
+        Files.deleteIfExists(temp);
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   private URI buildUri(URI baseUri, String pathInRepo) {
@@ -219,6 +257,10 @@ public class Downloader {
     }
 
     return !JAR_PACKAGINGS.contains(extension);
+  }
+
+  private boolean isPomPathForNonPomCoordinates(Coordinates coords, Path path) {
+    return path.getFileName().toString().endsWith(".pom") && !"pom".equals(coords.getExtension());
   }
 
   private String calculateSha256(Path path) {

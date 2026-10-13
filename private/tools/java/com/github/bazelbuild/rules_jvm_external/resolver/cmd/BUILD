@@ -16,6 +16,7 @@ java_library(
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/netrc",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/remote",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/ui",
+        "//resolver",
         artifact(
             "com.google.code.gson:gson",
             repository_name = "rules_jvm_external_deps",

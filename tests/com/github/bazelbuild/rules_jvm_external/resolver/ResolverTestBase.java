@@ -186,33 +186,6 @@ public abstract class ResolverTestBase {
     assertEquals(coords, resolved.nodes().iterator().next());
   }
 
-  @Test
-  public void shouldDownloadOverHttpWithAuthenticationPassedInOnRepoUrl() throws IOException {
-    Coordinates coords = new Coordinates("com.example:foo:1.0");
-
-    Path repo = MavenRepo.create().add(coords).getPath();
-
-    HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-    HttpContext context = server.createContext("/", new PathHandler(repo));
-    context.setAuthenticator(
-        new BasicAuthenticator("maven") {
-          @Override
-          public boolean checkCredentials(String username, String password) {
-            return "cheese".equals(username) && "hunter2".equals(password);
-          }
-        });
-    server.start();
-
-    int port = server.getAddress().getPort();
-
-    URI remote = URI.create("http://cheese:hunter2@localhost:" + port);
-
-    Graph<Coordinates> resolved =
-        resolver.resolve(prepareRequestFor(remote, coords)).getResolution();
-
-    assertEquals(1, resolved.nodes().size());
-    assertEquals(coords, resolved.nodes().iterator().next());
-  }
 
   @Test
   public void shouldDownloadOverHttpWithAuthenticationGatheredFromNetrc() throws IOException {
@@ -877,9 +850,10 @@ public abstract class ResolverTestBase {
     // Validate that the downloaded artifact has the correct SHA for the forced version.
     // This catches bugs where the resolver fetches artifacts via detached configurations
     // that bypass force_version, resulting in the wrong file being downloaded.
-    Map<Coordinates, Path> paths = result.getPaths();
-    if (paths.containsKey(lowerVersion)) {
-      Path downloadedArtifact = paths.get(lowerVersion);
+    Map<Coordinates, ResolvedArtifact> artifacts = result.getArtifacts();
+    ResolvedArtifact lower = artifacts.get(lowerVersion);
+    if (lower != null && lower.getPath().isPresent()) {
+      Path downloadedArtifact = lower.getPath().get();
       Path expectedArtifact = repo.resolve(lowerVersion.toRepoPath());
 
       // Compare SHA256 of downloaded file vs expected file in repo

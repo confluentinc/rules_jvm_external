@@ -16,6 +16,52 @@ java_test(
 )
 
 java_test(
+    name = "GradleResolvedDependencyImplTest",
+    srcs = ["GradleResolvedDependencyImplTest.java"],
+    test_class = "com.github.bazelbuild.rules_jvm_external.resolver.gradle.GradleResolvedDependencyImplTest",
+    deps = [
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle/models",
+        artifact(
+            "junit:junit",
+            repository_name = "regression_testing_coursier",
+        ),
+    ],
+)
+
+java_test(
+    name = "GradleResolverLoggingTest",
+    size = "small",
+    srcs = ["GradleResolverLoggingTest.java"],
+    test_class = "com.github.bazelbuild.rules_jvm_external.resolver.gradle.GradleResolverLoggingTest",
+    deps = [
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle:gradle-resolver-lib",
+        "@gradle",
+        artifact(
+            "junit:junit",
+            repository_name = "regression_testing_coursier",
+        ),
+    ],
+)
+
+java_test(
+    name = "GradleBuildScriptGeneratorTestFixturesTest",
+    srcs = ["GradleBuildScriptGeneratorTestFixturesTest.java"],
+    data = [
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle/data:gradle_build_templates",
+    ],
+    test_class = "com.github.bazelbuild.rules_jvm_external.resolver.gradle.GradleBuildScriptGeneratorTestFixturesTest",
+    deps = [
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle/models",
+        artifact(
+            "junit:junit",
+            repository_name = "regression_testing_coursier",
+        ),
+        "@bazel_tools//tools/java/runfiles",
+    ],
+)
+
+java_test(
     name = "GradleResolverTest",
     timeout = "eternal",
     srcs = [
@@ -37,8 +83,13 @@ java_test(
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/events",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle/models",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/lockfile",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/netrc",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/remote",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/ui",
+        "//resolver",
         "//tests/com/github/bazelbuild/rules_jvm_external/resolver",
+        "@rules_jvm_external_deps//:org_apache_maven_maven_model",
         artifact(
             "junit:junit",
             repository_name = "regression_testing_coursier",

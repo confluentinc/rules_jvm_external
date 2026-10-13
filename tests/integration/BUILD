@@ -98,6 +98,35 @@ diff_test(
     file2 = ":forced-versions-deps-sorted.txt",
 )
 
+# The main jar and the test-fixtures jar of misk-feature are requested at
+# different versions with the "pinned" policy. Gradle selects one version per
+# module, so both must land on the version of the unclassified root.
+genquery(
+    name = "gradle-classifier-pinning-deps",
+    expression = "deps(@gradle_classifier_pinning//:com_squareup_misk_misk_feature_test_fixtures)",
+    opts = [
+        "--nohost_deps",
+        "--noimplicit_deps",
+    ],
+    scope = ["@gradle_classifier_pinning//:com_squareup_misk_misk_feature_test_fixtures"],
+)
+
+genrule(
+    name = "gradle-classifier-pinning-deps-sorted",
+    testonly = 1,
+    srcs = [":gradle-classifier-pinning-deps"],
+    outs = ["gradle-classifier-pinning-deps-sorted.txt"],
+    cmd = "cat $< | grep misk-feature | sed -e 's|^@@|@|g; s|\r||g' | sed -e 's|^@[^/]*[+~]|@|g; s|\r||g' | sort > $@",
+)
+
+# If a version is forced per artifact rather than per Gradle module, the main
+# jar is silently downgraded to the test-fixtures version `2026.06.30.120630-d342aab`
+diff_test(
+    name = "gradle-classifier-pinning-deps-test",
+    file1 = "gradle-classifier-pinning-deps.golden.unix",
+    file2 = ":gradle-classifier-pinning-deps-sorted.txt",
+)
+
 genquery(
     name = "root-wins-deps",
     expression = "deps(@root_wins//:io_netty_netty_buffer)",
@@ -122,6 +151,58 @@ diff_test(
     file1 = "root-wins-deps.golden.unix",
     file2 = ":root-wins-deps-sorted.txt",
     # This test only makes sense if we're running with `bzlmod` enabled
+    tags = [] if is_bzlmod_enabled() else ["manual"],
+)
+
+genquery(
+    name = "coursier-layering-deps",
+    expression = "deps(@coursier_layering//:com_google_code_findbugs_jsr305)",
+    opts = [
+        "--nohost_deps",
+        "--noimplicit_deps",
+    ],
+    scope = ["@coursier_layering//:com_google_code_findbugs_jsr305"],
+)
+
+genrule(
+    name = "coursier-layering-deps-sorted",
+    testonly = 1,
+    srcs = [":coursier-layering-deps"],
+    outs = ["coursier-layering-deps-sorted.txt"],
+    cmd = "cat $< | grep coursier_layering | sed -e 's|^@@|@|g; s|\\r||g' | sed -e 's|^@[^/]*[+~]|@|g; s|\\r||g' | sort > $@",
+)
+
+diff_test(
+    name = "coursier-layering-deps-test",
+    file1 = "coursier-layering-deps.golden.unix",
+    file2 = ":coursier-layering-deps-sorted.txt",
+    tags = [] if is_bzlmod_enabled() else ["manual"],
+)
+
+genquery(
+    name = "coursier-pinned-layering-deps",
+    expression = "deps(@coursier_pinned_layering//:com_google_code_findbugs_jsr305)",
+    opts = [
+        "--nohost_deps",
+        "--noimplicit_deps",
+    ],
+    scope = ["@coursier_pinned_layering//:com_google_code_findbugs_jsr305"],
+)
+
+genrule(
+    name = "coursier-pinned-layering-deps-sorted",
+    srcs = [":coursier-pinned-layering-deps"],
+    outs = ["coursier-pinned-layering-deps-sorted.txt"],
+    cmd = "cat $< | grep coursier_pinned_layering | sed -e 's|^@@|@|g; s|\\r||g' | sed -e 's|^@[^/]*[+~]|@|g; s|\\r||g' | sort > $@",
+)
+
+# The root pins jsr305 at 3.0.1 while the contributing module offers 3.0.2.
+# Without root precedence under `version_conflict_policy = "pinned"` the
+# resolved version would be 3.0.2.
+diff_test(
+    name = "coursier-pinned-layering-deps-test",
+    file1 = "coursier-pinned-layering-deps.golden.unix",
+    file2 = ":coursier-pinned-layering-deps-sorted.txt",
     tags = [] if is_bzlmod_enabled() else ["manual"],
 )
 
