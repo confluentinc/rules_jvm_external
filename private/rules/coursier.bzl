@@ -103,10 +103,13 @@ sh_binary(
         "outdated.repositories",
     ],
     args = [
-        "$(location @rules_jvm_external//private/tools/prebuilt:outdated_deploy.jar)",
-        "$(location outdated.artifacts)",
-        "$(location outdated.boms)",
-        "$(location outdated.repositories)",
+        "$(rlocationpath @rules_jvm_external//private/tools/prebuilt:outdated_deploy.jar)",
+        "$(rlocationpath outdated.artifacts)",
+        "$(rlocationpath outdated.boms)",
+        "$(rlocationpath outdated.repositories)",
+    ],
+    deps = [
+        "@bazel_tools//tools/bash/runfiles",
     ],
     visibility = ["//visibility:public"],
 )
@@ -115,6 +118,17 @@ sh_binary(
 EMPTY_FILE_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 _IN_REPO_PIN = """
+load("@rules_java//java:java_binary.bzl", "java_binary")
+
+java_binary(
+    name = "custom_resolver",
+    main_class = "{main_class}",
+    visibility = ["//visibility:public"],
+    runtime_deps = [
+        {resolver_lib},
+    ] + {resolver_extra_dependencies},
+)
+
 pin_dependencies(
     name = "pin",
     boms = {boms},
@@ -127,7 +141,7 @@ pin_dependencies(
     dependency_index = {dependency_index},
     jvm_flags = {jvm_flags},
     visibility = ["//visibility:public"],
-    resolver = {resolver},
+    resolver = ":custom_resolver",
 )
 """
 
@@ -197,9 +211,12 @@ def _execute_with_argsfile(
     # This could be avoided by adding a disambiguator to the argsfile name.
 
     # Avoid argument limits by putting list of files to inspect into a file
+    argsfile_content = "\n".join([str(f) for f in files_to_inspect])
+    if argsfile_content:
+        argsfile_content += "\n"
     repository_ctx.file(
         "{}_argsfile".format(tool_name),
-        "\n".join([str(f) for f in files_to_inspect]) + "\n",
+        argsfile_content,
         executable = False,
     )
 
@@ -311,10 +328,7 @@ def _generate_java_jar_command_for_coursier(repository_ctx, jar_path):
     java_path = _java_path(repository_ctx)
 
     if java_path != None:
-        # https://github.com/coursier/coursier/blob/master/doc/FORMER-README.md#how-can-the-launcher-be-run-on-windows-or-manually-with-the-java-program
-        # The -noverify option seems to be required after the proguarding step
-        # of the main JAR of coursier.
-        cmd = [java_path, "-noverify", "-jar"] + coursier_opts + _get_java_proxy_args(repository_ctx) + [jar_path]
+        cmd = [java_path, "-jar"] + coursier_opts + _get_java_proxy_args(repository_ctx) + [jar_path]
     else:
         # Try to execute coursier directly
         cmd = [jar_path] + coursier_opts + ["-J%s" % arg for arg in _get_java_proxy_args(repository_ctx)]
@@ -539,8 +553,9 @@ def _add_direct_deps_files(repository_ctx, direct_deps):
     )
 
 def is_repin_required(repository_ctx):
-    env_var_names = repository_ctx.os.environ.keys()
-    return "RULES_JVM_EXTERNAL_REPIN" not in env_var_names and "REPIN" not in env_var_names
+    repin_env_var = repository_ctx.getenv("REPIN")
+    rules_jvm_external_repin_env_var = repository_ctx.getenv("RULES_JVM_EXTERNAL_REPIN")
+    return rules_jvm_external_repin_env_var == None and repin_env_var == None
 
 def _get_fail_if_repin_required(repository_ctx):
     if not repository_ctx.attr.fail_if_repin_required:
@@ -563,10 +578,10 @@ def _pinned_coursier_fetch_impl(repository_ctx):
     repositories = [json.decode(repository) for repository in repository_ctx.attr.repositories]
 
     artifacts = [json.decode(artifact) for artifact in repository_ctx.attr.artifacts]
-    _check_artifacts_are_unique(artifacts, repository_ctx.attr.duplicate_version_warning)
+    check_artifacts_are_unique(artifacts, repository_ctx.attr.duplicate_version_warning)
 
     boms = [json.decode(bom) for bom in repository_ctx.attr.boms]
-    _check_artifacts_are_unique(boms, repository_ctx.attr.duplicate_version_warning)
+    check_artifacts_are_unique(boms, repository_ctx.attr.duplicate_version_warning)
 
     # Read Coursier state from maven_install.json.
     repository_ctx.symlink(
@@ -847,6 +862,10 @@ def _pinned_coursier_fetch_impl(repository_ctx):
                 executable = False,
             )
 
+    if hasattr(repository_ctx, "repo_metadata"):
+        return repository_ctx.repo_metadata(reproducible = False)
+    return None
+
 def generate_pin_target(repository_ctx, unpinned_pin_target):
     if repository_ctx.attr.resolver == "coursier":
         return _BUILD_PIN_ALIAS.format(unpinned_pin_target = unpinned_pin_target)
@@ -859,9 +878,11 @@ def generate_pin_target(repository_ctx, unpinned_pin_target):
             lock_file_location = "/".join([package_path, file_name])  # e.g. path/to/some.json
 
         if repository_ctx.attr.resolver == "maven":
-            resolver_target = Label("//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/maven:MavenMain")
+            main_class = "com.github.bazelbuild.rules_jvm_external.resolver.maven.MavenMain"
+            resolver_lib = Label("//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/maven:maven-resolver-lib")
         elif repository_ctx.attr.resolver == "gradle":
-            resolver_target = Label("//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle:GradleMain")
+            main_class = "com.github.bazelbuild.rules_jvm_external.resolver.gradle.GradleMain"
+            resolver_lib = Label("//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/gradle:gradle-resolver-lib")
         else:
             fail("Unknown resolver")
 
@@ -875,6 +896,9 @@ def generate_pin_target(repository_ctx, unpinned_pin_target):
                 dependency_index_location = "/".join([dep_index_package_path, dep_index_file_name])
 
         return _IN_REPO_PIN.format(
+            main_class = main_class,
+            resolver_lib = repr(str(resolver_lib)),
+            resolver_extra_dependencies = repr([str(l) for l in repository_ctx.attr.resolver_extra_dependencies]),
             boms = repr(repository_ctx.attr.boms),
             artifacts = repr(repository_ctx.attr.artifacts),
             excluded_artifacts = repr(repository_ctx.attr.excluded_artifacts),
@@ -884,7 +908,6 @@ def generate_pin_target(repository_ctx, unpinned_pin_target):
             fetch_javadocs = repr(repository_ctx.attr.fetch_javadoc),
             lock_file = repr(lock_file_location),
             dependency_index = repr(dependency_index_location),
-            resolver = repr(str(resolver_target)),
         )
 
 def infer_artifact_path_from_primary_and_repos(primary_url, repository_urls):
@@ -914,7 +937,7 @@ def infer_artifact_path_from_primary_and_repos(primary_url, repository_urls):
             break
     return primary_artifact_path
 
-def _check_artifacts_are_unique(artifacts, duplicate_version_warning):
+def check_artifacts_are_unique(artifacts, duplicate_version_warning):
     if duplicate_version_warning == "none":
         return
     seen_artifacts = {}
@@ -939,7 +962,9 @@ def _check_artifacts_are_unique(artifacts, duplicate_version_warning):
         if duplicate_version_warning == "error":
             fail("\n".join(msg_parts))
         else:
-            print("\n".join(msg_parts))
+            message = "\n".join(msg_parts)
+            print(message)
+            return message
 
 def get_coursier_sha256(environ, default_sha256):
     return environ.get("COURSIER_SHA256", default_sha256)
@@ -984,6 +1009,34 @@ def get_coursier_cache_or_default(repository_ctx, use_unsafe_shared_cache):
         return "%s/.coursier/cache/v1" % os_env.get("HOME")
 
     return default_cache_dir
+
+# Compute the environment for the spawned coursier process, forcing the cache
+# location that get_coursier_cache_or_default computed.
+#
+# Coursier itself would otherwise derive its default cache location from the
+# JVM's `user.home` property, which on Linux comes from the passwd database and
+# ignores $HOME, while this file derives it from $HOME (or $XDG_CACHE_HOME). If
+# the two disagree (e.g. $HOME points at a network mount), coursier would
+# bypass the shared cache and report artifact paths that cannot be relativized
+# against it. Setting COURSIER_CACHE explicitly keeps both sides in agreement.
+# For repositories that do not use the shared cache, this also prevents
+# coursier from writing into home directories.
+# https://github.com/bazelbuild/rules_jvm_external/issues/301
+# https://github.com/coursier/coursier/blob/1cbbf39b88ee88944a8d892789680cdb15be4714/modules/paths/src/main/java/coursier/paths/CoursierPaths.java#L29-L56
+#
+# This method is public for testing.
+def get_coursier_environment(repository_ctx, use_unsafe_shared_cache):
+    if use_unsafe_shared_cache and not _is_windows(repository_ctx):
+        # Every shared cache location on this platform is derived from one of
+        # these variables. If none of them is usable, forcing COURSIER_CACHE
+        # would point coursier at a nonsensical path; leave the environment
+        # alone and let coursier use its own default instead.
+        os_env = repository_ctx.os.environ
+        xdg_cache_home = "" if _is_macos(repository_ctx) else os_env.get("XDG_CACHE_HOME", "")
+        if not (os_env.get("COURSIER_CACHE", "") or xdg_cache_home or os_env.get("HOME", "")):
+            return {}
+    cache_location = get_coursier_cache_or_default(repository_ctx, use_unsafe_shared_cache)
+    return {"COURSIER_CACHE": str(repository_ctx.path(cache_location))}
 
 def make_coursier_dep_tree(
         repository_ctx,
@@ -1080,19 +1133,14 @@ def make_coursier_dep_tree(
             cmd.append("--javadoc")
         cmd.append("--default=true")
 
-    environment = {}
-    if not _is_unpinned(repository_ctx):
+    is_unpinned = _is_unpinned(repository_ctx)
+    if not is_unpinned:
         coursier_cache_location = get_coursier_cache_or_default(
             repository_ctx,
             False,
         )
         cmd.extend(["--cache", coursier_cache_location])  # Download into $output_base/external/$maven_repo_name/v1
-
-        # If not using the shared cache and the user did not specify a COURSIER_CACHE, set the default
-        # value to prevent Coursier from writing into home directories.
-        # https://github.com/bazelbuild/rules_jvm_external/issues/301
-        # https://github.com/coursier/coursier/blob/1cbbf39b88ee88944a8d892789680cdb15be4714/modules/paths/src/main/java/coursier/paths/CoursierPaths.java#L29-L56
-        environment = {"COURSIER_CACHE": str(repository_ctx.path(coursier_cache_location))}
+    environment = get_coursier_environment(repository_ctx, is_unpinned)
 
     cmd.extend(additional_coursier_options)
 
@@ -1161,6 +1209,7 @@ def filter_dependencies_if_necessary(repository_ctx, dep_tree):
                 if _is_verbose(repository_ctx):
                     print("Removing source artifact with no file: %s" % dep["coord"])
             else:
+                dep["file"] = None
                 amended_deps.append(dep)
             continue
 
@@ -1237,10 +1286,10 @@ def _coursier_fetch_impl(repository_ctx):
     for artifact in repository_ctx.attr.artifacts:
         artifacts.append(json.decode(artifact))
 
-    _check_artifacts_are_unique(artifacts, repository_ctx.attr.duplicate_version_warning)
+    check_artifacts_are_unique(artifacts, repository_ctx.attr.duplicate_version_warning)
 
     boms = [json.decode(bom) for bom in repository_ctx.attr.boms]
-    _check_artifacts_are_unique(boms, repository_ctx.attr.duplicate_version_warning)
+    check_artifacts_are_unique(boms, repository_ctx.attr.duplicate_version_warning)
 
     excluded_artifacts = []
     for artifact in repository_ctx.attr.excluded_artifacts:
@@ -1278,8 +1327,8 @@ def _coursier_fetch_impl(repository_ctx):
 
     for artifact in dep_tree["dependencies"]:
         # Some artifacts don't contain files; they are just parent artifacts
-        # to other artifacts.
-        if artifact["file"] == None:
+        # to other artifacts. Coursier may represent these as null or "".
+        if not artifact.get("file", None):
             continue
 
         coord_split = artifact["coord"].split(":")
@@ -1411,7 +1460,7 @@ def _coursier_fetch_impl(repository_ctx):
 
     for artifact in dep_tree["dependencies"]:
         file = artifact["file"]
-        if file == None:
+        if not file:
             continue
         path = str(repository_ctx.path(file))
 
@@ -1602,6 +1651,10 @@ def _coursier_fetch_impl(repository_ctx):
             executable = False,
         )
 
+    if hasattr(repository_ctx, "repo_metadata"):
+        return repository_ctx.repo_metadata(reproducible = False)
+    return None
+
 pinned_coursier_fetch = repository_rule(
     attrs = {
         "_compat_repository": attr.label(default = "//private:compat_repository.bzl"),
@@ -1650,9 +1703,16 @@ pinned_coursier_fetch = repository_rule(
             doc = "Instructions to re-pin the repository if required. Many people have wrapper scripts for keeping dependencies up to date, and would like to point users to that instead of the default.",
         ),
         "excluded_artifacts": attr.string_list(default = []),  # only used for hash generation
+        "resolver_extra_dependencies": attr.label_list(default = []),
         # Use @@// to refer to the main repo with Bzlmod.
         "_workspace_label": attr.label(default = ("@@" if str(Label("//:invalid")).startswith("@@") else "@") + "//does/not:exist"),
     },
+    environ = [
+        "HOME",
+        "JDK_JAVA_OPTIONS",
+        "RJE_VERBOSE",
+        "USERPROFILE",
+    ],
     implementation = _pinned_coursier_fetch_impl,
 )
 
@@ -1724,6 +1784,7 @@ coursier_fetch = repository_rule(
         ),
     },
     environ = [
+        "HOME",
         "JAVA_HOME",
         "JDK_JAVA_OPTIONS",
         "http_proxy",
@@ -1736,7 +1797,10 @@ coursier_fetch = repository_rule(
         "COURSIER_OPTS",
         "COURSIER_SHA256",
         "COURSIER_URL",
+        "REPIN",
+        "RULES_JVM_EXTERNAL_REPIN",
         "RJE_VERBOSE",
+        "USERPROFILE",
         "XDG_CACHE_HOME",
     ],
     implementation = _coursier_fetch_impl,

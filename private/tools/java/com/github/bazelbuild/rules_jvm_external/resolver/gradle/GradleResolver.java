@@ -19,6 +19,7 @@ import com.github.bazelbuild.rules_jvm_external.resolver.Artifact;
 import com.github.bazelbuild.rules_jvm_external.resolver.Conflict;
 import com.github.bazelbuild.rules_jvm_external.resolver.ResolutionRequest;
 import com.github.bazelbuild.rules_jvm_external.resolver.ResolutionResult;
+import com.github.bazelbuild.rules_jvm_external.resolver.ResolvedArtifact;
 import com.github.bazelbuild.rules_jvm_external.resolver.Resolver;
 import com.github.bazelbuild.rules_jvm_external.resolver.events.EventListener;
 import com.github.bazelbuild.rules_jvm_external.resolver.events.LogEvent;
@@ -181,7 +182,7 @@ public class GradleResolver implements Resolver {
 
     for (GradleResolvedDependency dependency : implementationDependencies) {
       Set<Coordinates> visited = new HashSet<>();
-      for (GradleResolvedArtifact artifact : dependency.getArtifacts()) {
+      for (GradleResolvedArtifact artifact : artifactsForGraph(dependency)) {
         GradleCoordinates gradleCoordinates =
             new GradleCoordinatesImpl(
                 dependency.getGroup(),
@@ -324,11 +325,41 @@ public class GradleResolver implements Resolver {
     // Only include paths for coordinates that are actually in the final resolved graph
     paths.keySet().retainAll(graph.nodes());
 
-    return new ResolutionResult(graph, conflicts, paths);
+    Map<Coordinates, ResolvedArtifact> artifacts = new HashMap<>();
+    for (Coordinates node : graph.nodes()) {
+      artifacts.put(node, new ResolvedArtifact(node, paths.get(node)));
+    }
+
+    return new ResolutionResult(graph, conflicts, artifacts);
   }
 
   private String makeDepKey(String group, String artifact, String version) {
     return group + ":" + artifact + ":" + version;
+  }
+
+  // A feature variant's node identity comes from its classified artifacts. The module's POM
+  // carries no classifier, so including it here would coerce the node back to the unclassified
+  // coordinates and recreate the main artifact's node from the feature variant's dependency.
+  private List<GradleResolvedArtifact> artifactsForGraph(GradleResolvedDependency dependency) {
+    if (!dependency.isFeatureVariant()) {
+      return dependency.getArtifacts();
+    }
+    boolean hasNonPomArtifact =
+        dependency.getArtifacts().stream().anyMatch(artifact -> !isPomArtifact(artifact));
+    if (!hasNonPomArtifact) {
+      return dependency.getArtifacts();
+    }
+    return dependency.getArtifacts().stream()
+        .filter(artifact -> !isPomArtifact(artifact))
+        .collect(Collectors.toList());
+  }
+
+  private boolean isPomArtifact(GradleResolvedArtifact artifact) {
+    File file = artifact.getFile();
+    if (file != null && file.getName().endsWith(".pom")) {
+      return true;
+    }
+    return "pom".equals(artifact.getExtension());
   }
 
   private void addDependency(
@@ -347,7 +378,7 @@ public class GradleResolver implements Resolver {
 
     if (parentInfo.getChildren() != null) {
       for (GradleResolvedDependency childInfo : parentInfo.getChildren()) {
-        for (GradleResolvedArtifact childArtifact : childInfo.getArtifacts()) {
+        for (GradleResolvedArtifact childArtifact : artifactsForGraph(childInfo)) {
           GradleCoordinates childCoordinates =
               new GradleCoordinatesImpl(
                   childInfo.getGroup(),
@@ -370,6 +401,12 @@ public class GradleResolver implements Resolver {
           // Track artifact for child node
           artifactsByNode.computeIfAbsent(child, k -> new ArrayList<>()).add(childArtifact);
           graph.addNode(child);
+          // A variant may depend on another variant of the same module (test fixtures depend on
+          // the main jar). When both alias to the same coordinates, drop the self edge: it says
+          // nothing useful and the lock file cannot express it.
+          if (parent.equals(child)) {
+            continue;
+          }
           graph.putEdge(parent, child);
           // if there's a conflict and the conflicting version isn't one that's actually requested
           // then it's an actual conflict we want to report

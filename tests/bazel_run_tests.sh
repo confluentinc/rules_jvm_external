@@ -32,6 +32,17 @@ function test_duplicate_version_warning() {
   expect_log "Successfully pinned resolved artifacts"
 }
 
+function test_duplicate_version_error() {
+  if bazel run @duplicate_version_error//:pin >> "$TEST_LOG" 2>&1; then
+    printf "Expected duplicate artifact versions to fail the build\n" >> "$TEST_LOG"
+    return 1
+  fi
+
+  expect_log "Found duplicate artifact versions"
+  expect_log "com.fasterxml.jackson.core:jackson-annotations has multiple versions"
+  expect_not_log "Successfully pinned resolved artifacts"
+}
+
 function test_duplicate_version_warning_same_version() {
   bazel run @duplicate_version_warning_same_version//:pin >> "$TEST_LOG" 2>&1
   rm -f *duplicate_version_warning_same_version_install.json
@@ -116,25 +127,43 @@ function test_m2local_testing_found_local_artifact_through_pin_and_build() {
 }
 
 function test_unpinned_m2local_testing_found_local_artifact_through_pin_and_build() {
-  m2local_dir="${HOME}/.m2/repository"
-  jar_dir="${m2local_dir}/com/example/kt/1.0.0"
-  rm -rf ${jar_dir}
-  mkdir -p ${m2local_dir}
-  # Publish a maven artifact locally - com.example.kt:1.0.0
-  bazel run --define maven_repo="file://${m2local_dir}" //tests/integration/java_export:without-docs.publish >> "$TEST_LOG" 2>&1
+  (
+    # Isolate HOME so Coursier's m2local scan sees only the artifact this test
+    # publishes, not unrelated entries from the user's real ~/.m2 repository.
+    original_home="${HOME}"
+    if ! test_home="$(mktemp -d "${original_home}/rje_test_home.XXXXXX" 2>/dev/null)"; then
+      test_home="$(mktemp -d "${PWD}/.rje_test_home.XXXXXX")"
+    fi
+    cleanup_test_home() {
+      rm -rf "${test_home}"
+    }
+    trap cleanup_test_home EXIT
+    repo_env=(
+      "--repo_env=HOME=${test_home}"
+      "--repo_env=COURSIER_OPTS=-Duser.home=${test_home}${COURSIER_OPTS:+ ${COURSIER_OPTS}}"
+    )
 
-  # Force the repo rule to be evaluated again. Without this, the "assuming maven local..." message will not be printed
-  bazel clean --expunge >/dev/null 2>&1
+    bazel shutdown >> "$TEST_LOG" 2>&1 || true
 
-  bazel run @unpinned_m2local_testing_repin//:pin >> "$TEST_LOG" 2>&1
+    m2local_dir="${test_home}/.m2/repository"
+    jar_dir="${m2local_dir}/com/example/no-docs/1.0.0"
+    rm -rf "${jar_dir}"
+    mkdir -p "${m2local_dir}"
+    # Publish a maven artifact locally - com.example:no-docs:1.0.0
+    bazel run --define maven_repo="file://${m2local_dir}" //tests/integration/java_export:without-docs.publish >> "$TEST_LOG" 2>&1
 
-  force_bzlmod_lock_file_to_be_regenerated
+    # Force the repo rule to be evaluated again. Without this, the "assuming maven local..." message will not be printed
+    bazel shutdown >> "$TEST_LOG" 2>&1 || true
 
-  bazel build @m2local_testing_repin//:com_example_no_docs >> "$TEST_LOG" 2>&1
-  rm -rf ${jar_dir}
+    bazel run "${repo_env[@]}" @unpinned_m2local_testing_repin//:pin >> "$TEST_LOG" 2>&1
 
-  expect_log "Assuming maven local for artifact: com.example:no-docs:1.0.0"
-  expect_log "Successfully pinned resolved artifacts"
+    force_bzlmod_lock_file_to_be_regenerated
+
+    bazel build "${repo_env[@]}" @m2local_testing_repin//:com_example_no_docs >> "$TEST_LOG" 2>&1
+
+    expect_log "Assuming maven local for artifact: com.example:no-docs:1.0.0"
+    expect_log "Successfully pinned resolved artifacts"
+  )
 }
 
 function test_m2local_testing_found_local_artifact_through_build() {
@@ -237,6 +266,13 @@ function test_outdated_no_external_runfiles() {
   expect_log "junit:junit \[4.12"
 }
 
+function test_outdated_noenable_runfiles() {
+  bazel run @regression_testing_coursier//:outdated --noenable_runfiles >> "$TEST_LOG" 2>&1
+
+  expect_log "Checking for updates of .* artifacts against the following repositories"
+  expect_log "junit:junit \[4.12"
+}
+
 function test_outdated_with_boms() {
   bazel run @regression_testing_maven//:outdated >> "$TEST_LOG" 2>&1
 
@@ -251,6 +287,41 @@ function test_outdated_with_boms_does_not_include_artifacts_without_a_version() 
   expect_log "com.google.cloud:libraries-bom \[26.59.0"
   expect_not_log "com.google.cloud:google-cloud-bigquery"
   expect_not_log "\[None"
+}
+
+function test_bom_only_pinning() {
+  REPIN=1 bazel run @bom_only_pinning//:pin >> "$TEST_LOG" 2>&1
+
+  expect_log "Successfully pinned resolved artifacts"
+  expect_file_is_not_empty "tests/custom_maven_install/bom_only_pinning_install.json"
+}
+
+function test_maven_resolver_missing_source_jar() {
+  # https://github.com/bazel-contrib/rules_jvm_external/issues/1477
+  # Guava depends on the empty listenablefuture jar, which has no sources jar.
+  # Resolving with the Maven resolver and fetch_sources = True must not fail on
+  # the missing sources jar (this `bazel run` crashed before the fix).
+  REPIN=1 bazel run @maven_missing_source_jar//:pin >> "$TEST_LOG" 2>&1
+  expect_file_is_not_empty "tests/custom_maven_install/maven_missing_source_jar_install.json"
+
+  bazel query '@maven_missing_source_jar//:*' >> "$TEST_LOG" 2>&1
+  # Sources were fetched for artifacts that publish them...
+  expect_log "guava.*-sources.jar"
+  # ...but the source-less listenablefuture jar has no sources target.
+  expect_not_log "listenablefuture.*sources"
+}
+
+function test_gradle_resolver_missing_source_jar() {
+  # https://github.com/bazel-contrib/rules_jvm_external/issues/1477
+  # As test_maven_resolver_missing_source_jar, but via the Gradle resolver.
+  REPIN=1 bazel run @gradle_missing_source_jar//:pin >> "$TEST_LOG" 2>&1
+  expect_file_is_not_empty "tests/custom_maven_install/gradle_missing_source_jar_install.json"
+
+  bazel query '@gradle_missing_source_jar//:*' >> "$TEST_LOG" 2>&1
+  # Sources were fetched for artifacts that publish them...
+  expect_log "guava.*-sources.jar"
+  # ...but the source-less listenablefuture jar has no sources target.
+  expect_not_log "listenablefuture.*sources"
 }
 
 function test_coursier_resolution_with_boms() {
@@ -386,13 +457,16 @@ function test_legacy_multi_repo_hash_accepted_by_fallback() {
 }
 
 TESTS=(
+  "test_bom_only_pinning"
   "test_coursier_resolution_with_boms"
   "test_maven_resolution"
   "test_dependency_aggregation"
+  "test_duplicate_version_error"
   "test_duplicate_version_warning"
   "test_duplicate_version_warning_same_version"
   "test_outdated"
   "test_outdated_no_external_runfiles"
+  "test_outdated_noenable_runfiles"
   "test_outdated_with_boms"
   "test_outdated_with_boms_does_not_include_artifacts_without_a_version"
   "test_m2local_testing_found_local_artifact_through_pin_and_build"
@@ -406,6 +480,8 @@ TESTS=(
   "test_v1_lock_file_format"
   "test_dependency_pom_exclusion"
   "test_transitive_dependency_with_type_of_pom"
+  "test_maven_resolver_missing_source_jar"
+  "test_gradle_resolver_missing_source_jar"
   "test_when_both_pom_and_jar_artifact_are_available_jar_artifact_is_present"
   "test_when_both_pom_and_jar_artifact_are_dependencies_jar_artifact_is_present"
   "test_publish_java_binary_jar_with_maven_export"

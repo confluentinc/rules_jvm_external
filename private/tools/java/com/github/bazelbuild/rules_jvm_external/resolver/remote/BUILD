@@ -11,10 +11,12 @@ java_library(
     ],
     deps = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/jar:IndexJar-lib",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/events",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/netrc",
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/ui",
+        "//resolver",
         artifact(
             "com.google.guava:guava",
             repository_name = "rules_jvm_external_deps",

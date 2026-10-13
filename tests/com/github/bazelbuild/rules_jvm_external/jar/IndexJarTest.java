@@ -15,23 +15,44 @@
 package com.github.bazelbuild.rules_jvm_external.jar;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeFalse;
 
 import com.google.devtools.build.runfiles.Runfiles;
 import com.google.gson.Gson;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class IndexJarTest {
+
+  // rules_kotlin's kotlin_top_level_fixture output can't be opened via NIO on
+  // Windows CI. See the broader rules_kotlin-on-Windows caveat in .bazelrc.
+  @BeforeClass
+  public static void checkPlatform() {
+    assumeFalse(System.getProperty("os.name").toLowerCase().contains("win"));
+  }
+
   @Test
   public void simplePackages() throws Exception {
     doTest(
@@ -121,8 +142,194 @@ public class IndexJarTest {
     }
   }
 
+  @Test
+  public void aarWithSinglePackage() throws Exception {
+    Path aarFile = new AarTestBuilder().withClass("com.example.TestClass").build();
+    try {
+      PerJarIndexResults result = new IndexJar().index(aarFile);
+      assertEquals(sortedSet("com.example"), result.getPackages());
+      assertEquals(new TreeMap<>(), result.getServiceImplementations());
+    } finally {
+      Files.deleteIfExists(aarFile);
+    }
+  }
+
+  @Test
+  public void aarWithMultiplePackages() throws Exception {
+    Path aarFile =
+        new AarTestBuilder()
+            .withClass("com.example.MainClass")
+            .withClass("com.example.model.User")
+            .withClass("com.example.utils.Helper")
+            .build();
+    try {
+      PerJarIndexResults result = new IndexJar().index(aarFile);
+      assertEquals(
+          sortedSet("com.example", "com.example.model", "com.example.utils"), result.getPackages());
+      assertEquals(new TreeMap<>(), result.getServiceImplementations());
+    } finally {
+      Files.deleteIfExists(aarFile);
+    }
+  }
+
+  @Test
+  public void aarWithServiceImplementations() throws Exception {
+    Path aarFile =
+        new AarTestBuilder()
+            .withClass("com.example.Service")
+            .withClass("com.example.ServiceImpl")
+            .withService("com.example.Service", "com.example.ServiceImpl")
+            .build();
+    try {
+      PerJarIndexResults result = new IndexJar().index(aarFile);
+      assertEquals(sortedSet("com.example"), result.getPackages());
+
+      TreeMap<String, TreeSet<String>> expectedServices = new TreeMap<>();
+      expectedServices.put("com.example.Service", sortedSet("com.example.ServiceImpl"));
+      assertEquals(expectedServices, result.getServiceImplementations());
+    } finally {
+      Files.deleteIfExists(aarFile);
+    }
+  }
+
+  @Test
+  public void aarMergesServiceImplementationsAcrossJars() throws Exception {
+    String service = "com.example.Service";
+    AarTestBuilder libJar =
+        new AarTestBuilder().withService(service, "com.third.party.LibraryServiceImpl");
+    Path aarFile =
+        new AarTestBuilder()
+            .withService(service, "com.example.ServiceImpl")
+            .withLibJar(libJar)
+            .build();
+    try {
+      PerJarIndexResults result = new IndexJar().index(aarFile);
+
+      TreeMap<String, TreeSet<String>> expectedServices = new TreeMap<>();
+      expectedServices.put(
+          service, sortedSet("com.example.ServiceImpl", "com.third.party.LibraryServiceImpl"));
+      assertEquals(expectedServices, result.getServiceImplementations());
+    } finally {
+      Files.deleteIfExists(aarFile);
+    }
+  }
+
+  @Test
+  public void aarWithLibsDirectory() throws Exception {
+    AarTestBuilder libJar = new AarTestBuilder().withClass("com.third.party.LibraryClass");
+
+    Path aarFile =
+        new AarTestBuilder().withClass("com.example.MainClass").withLibJar(libJar).build();
+    try {
+      PerJarIndexResults result = new IndexJar().index(aarFile);
+      // Should include packages from both classes.jar and libs/additional.jar
+      assertEquals(sortedSet("com.example", "com.third.party"), result.getPackages());
+      assertEquals(new TreeMap<>(), result.getServiceImplementations());
+    } finally {
+      Files.deleteIfExists(aarFile);
+    }
+  }
+
   private InputStream streamOf(String string) {
     return new ByteArrayInputStream(string.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static class AarTestBuilder {
+    private final List<String> classes = new ArrayList<>();
+    private final Map<String, List<String>> services = new LinkedHashMap<>();
+    private final List<AarTestBuilder> libJars = new ArrayList<>();
+
+    public AarTestBuilder withClass(String fullyQualifiedClassName) {
+      classes.add(fullyQualifiedClassName);
+      return this;
+    }
+
+    public AarTestBuilder withService(String serviceInterface, String... implementations) {
+      services.put(serviceInterface, Arrays.asList(implementations));
+      return this;
+    }
+
+    public AarTestBuilder withLibJar(AarTestBuilder libJarBuilder) {
+      libJars.add(libJarBuilder);
+      return this;
+    }
+
+    public Path build() throws IOException {
+      Path aarFile = Files.createTempFile("test-aar", ".aar");
+
+      try (ZipOutputStream aar = new ZipOutputStream(Files.newOutputStream(aarFile))) {
+        addAndroidManifest(aar);
+
+        byte[] classesJarBytes = createClassesJar();
+        aar.putNextEntry(new ZipEntry("classes.jar"));
+        aar.write(classesJarBytes);
+        aar.closeEntry();
+
+        for (int i = 0; i < libJars.size(); i++) {
+          AarTestBuilder libJarBuilder = libJars.get(i);
+          byte[] libJarBytes = libJarBuilder.createClassesJar();
+          aar.putNextEntry(new ZipEntry("libs/lib" + i + ".jar"));
+          aar.write(libJarBytes);
+          aar.closeEntry();
+        }
+      }
+
+      return aarFile;
+    }
+
+    private void addAndroidManifest(ZipOutputStream aar) throws IOException {
+      aar.putNextEntry(new ZipEntry("AndroidManifest.xml"));
+      String manifest =
+          "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+              + "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\""
+              + " package=\"com.example\">\n"
+              + "</manifest>\n";
+      aar.write(manifest.getBytes(StandardCharsets.UTF_8));
+      aar.closeEntry();
+    }
+
+    private byte[] createClassesJar() throws IOException {
+      ByteArrayOutputStream jarBytes = new ByteArrayOutputStream();
+      try (ZipOutputStream jar = new ZipOutputStream(jarBytes)) {
+        for (String className : classes) {
+          String classPath = className.replace('.', '/') + ".class";
+          jar.putNextEntry(new ZipEntry(classPath));
+          jar.closeEntry();
+        }
+
+        for (Map.Entry<String, List<String>> service : services.entrySet()) {
+          String servicePath = "META-INF/services/" + service.getKey();
+          jar.putNextEntry(new ZipEntry(servicePath));
+          String serviceContent = String.join("\n", service.getValue()) + "\n";
+          jar.write(serviceContent.getBytes(StandardCharsets.UTF_8));
+          jar.closeEntry();
+        }
+      }
+      return jarBytes.toByteArray();
+    }
+  }
+
+  @Test
+  public void skipsPackageInfo() throws Exception {
+    Path jar = Files.createTempFile("index-jar-package-info", ".jar");
+    try {
+      try (OutputStream fos = Files.newOutputStream(jar);
+          ZipOutputStream zos = new ZipOutputStream(fos)) {
+        writeEmptyEntry(zos, "com/example/Foo.class");
+        writeEmptyEntry(zos, "com/example/package-info.class");
+        writeEmptyEntry(zos, "package-info.class");
+      }
+      PerJarIndexResults results = new IndexJar().index(jar);
+      assertEquals(sortedSet("com.example"), results.getPackages());
+      assertEquals(sortedSet("com.example.Foo"), results.getClasses());
+    } finally {
+      Files.deleteIfExists(jar);
+    }
+  }
+
+  private void writeEmptyEntry(ZipOutputStream zos, String name) throws IOException {
+    zos.putNextEntry(new ZipEntry(name));
+    zos.closeEntry();
   }
 
   @Test
@@ -131,6 +338,31 @@ public class IndexJarTest {
         "google_api_services_compute_javadoc_for_test/file/google-api-services-compute-v1-rev235-1.25.0-javadoc.jar",
         sortedSet(),
         new TreeMap<>());
+  }
+
+  @Test
+  public void kotlinTopLevelDeclarations() throws Exception {
+    Path jar =
+        Paths.get(
+            Runfiles.create()
+                .rlocation(
+                    "rules_jvm_external/tests/com/github/bazelbuild/rules_jvm_external/jar/kotlin_top_level_fixture.jar"));
+    SortedSet<String> classes = new IndexJar().index(jar).getClasses();
+
+    // The file facade and the regular class are still indexed as classes.
+    assertTrue(classes.toString(), classes.contains("com.example.kotlin.TopLevelKt"));
+    assertTrue(classes.toString(), classes.contains("com.example.kotlin.RegularClass"));
+
+    // Public top-level declarations from the facade are folded in as package-qualified symbols,
+    // using their Kotlin source names.
+    assertTrue(classes.toString(), classes.contains("com.example.kotlin.topLevelFunction"));
+    assertTrue(classes.toString(), classes.contains("com.example.kotlin.topLevelProperty"));
+    assertTrue(classes.toString(), classes.contains("com.example.kotlin.TopLevelAlias"));
+
+    // Non-public top-level declarations cannot be imported from another artifact, so they're
+    // excluded.
+    assertFalse(classes.toString(), classes.contains("com.example.kotlin.internalFunction"));
+    assertFalse(classes.toString(), classes.contains("com.example.kotlin.privateFunction"));
   }
 
   private static class Lockfile {

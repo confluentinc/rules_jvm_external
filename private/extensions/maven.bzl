@@ -9,9 +9,15 @@ load(
     "escape",
     "strip_packaging_and_classifier_and_version",
 )
-load("//private/lib:coordinates.bzl", "to_external_form", "to_key", "unpack_coordinates")
+load("//private/lib:coordinates.bzl", "to_external_form", "unpack_coordinates")
+load(
+    "//private/lib:layering.bzl",
+    "DEFAULT_NAME",
+    "layer_maven_namespace",
+    "remove_empty_fields",
+    "should_print_diagnostic",
+)
 load("//private/rules:coursier.bzl", "DEFAULT_AAR_IMPORT_LABEL", "coursier_fetch", "pinned_coursier_fetch")
-load("//private/rules:maven_version.bzl", "compare_maven_versions")
 load("//private/rules:unpinned_maven_pin_command_alias.bzl", "unpinned_maven_pin_command_alias")
 load("//private/rules:v1_lock_file.bzl", "v1_lock_file")
 load("//private/rules:v3_lock_file.bzl", "v2_lock_file", "v3_lock_file")
@@ -20,8 +26,6 @@ load(":download_pinned_deps.bzl", "download_pinned_deps")
 DEFAULT_REPOSITORIES = [
     "https://repo1.maven.org/maven2",
 ]
-
-DEFAULT_NAME = "maven"
 
 _DEFAULT_RESOLVER = "coursier"
 
@@ -77,7 +81,7 @@ install = tag_class(
         "additional_netrc_lines": attr.string_list(doc = "Additional lines prepended to the netrc file used by `http_file` (with `maven_install_json` only).", default = []),
         "use_credentials_from_home_netrc_file": attr.bool(doc = "Whether to pass machine login credentials from the ~/.netrc file to coursier.", default = False),
         "duplicate_version_warning": attr.string(
-            doc = """What to do if there are duplicate artifacts
+            doc = """What to do if layering selects a non-root version instead of the root version, or if the root module declares multiple versions of the same coordinate
 
             If "error", then print a message and fail the build.
             If "warn", then print a warning and continue.
@@ -110,7 +114,9 @@ install = tag_class(
             doc = """Policy for user-defined vs. transitive dependency version conflicts
 
             If "pinned", choose the user-specified version in maven_install unconditionally.
-            If "default", follow Coursier's default policy.
+            In layered installs, artifacts contributed by the root module take precedence
+            over versions contributed by other modules.
+            If "default", follow the selected resolver's default policy.
             """,
             default = "default",
             values = [
@@ -121,6 +127,7 @@ install = tag_class(
         "ignore_empty_files": attr.bool(default = False, doc = "Treat jars that are empty as if they were not found."),
         "repin_instructions": attr.string(doc = "Instructions to re-pin the repository if required. Many people have wrapper scripts for keeping dependencies up to date, and would like to point users to that instead of the default. Only honoured for the root module."),
         "additional_coursier_options": attr.string_list(doc = "Additional options that will be passed to coursier."),
+        "resolver_extra_dependencies": attr.label_list(default = [], doc = "Jars or libraries to add to the resolver classpath (such as custom MetadataService or DownloadService SPI implementations)."),
     },
 )
 
@@ -179,24 +186,6 @@ def _add_exclusions(exclusions):
             to_return.append(exclusion)
     return to_return
 
-def _warn_if_multiple_contributing_modules(repo, repo_name, non_root_bazel_dep_to_artifacts):
-    known_contributing_modules = repo.get("known_contributing_modules", sets.make())
-    contributing_module_names = non_root_bazel_dep_to_artifacts.keys()
-    new_contributing_modules = sets.difference(sets.make(contributing_module_names), known_contributing_modules)
-    if sets.length(new_contributing_modules) > 0:
-        print("The maven repository '%s' has contributions from multiple bzlmod modules, and will be resolved together: %s." % (
-                  repo_name,
-                  sorted(contributing_module_names),
-              ) + "\nSee https://github.com/bazel-contrib/rules_jvm_external/blob/master/docs/bzlmod.md#module-dependency-layering" +
-              " for more information. \n" +
-              " To suppress this warning review the contributions from the other modules and add the following attribute" +
-              " in the root MODULE.bazel file: \n" +
-              "maven.install(\n" +
-              ("  name = \"{0}\"\n".format(repo_name) if repo_name != DEFAULT_NAME else "") +
-              "  known_contributing_modules = {0},\n".format(sorted(contributing_module_names)) +
-              "  ...\n" +
-              ")")
-
 def _generate_compat_repos(name, existing_compat_repos, artifacts):
     seen = []
 
@@ -214,68 +203,6 @@ def _generate_compat_repos(name, existing_compat_repos, artifacts):
         )
 
     return seen
-
-def _deduplicate_non_root_artifacts(bazel_dep_to_non_root_artifacts, return_only_artifacts = False):
-    coordinate_to_artifact = {}
-    for bazel_dep_name in bazel_dep_to_non_root_artifacts:
-        for artifact in bazel_dep_to_non_root_artifacts.get(bazel_dep_name, []):
-            if not getattr(artifact, "testonly", False):
-                artifact_key = to_key(artifact)
-
-                # prioritize highest version
-                if artifact_key in coordinate_to_artifact:
-                    _bazel_dep_name, current_artifact = coordinate_to_artifact[artifact_key]
-                    if compare_maven_versions(current_artifact.version, artifact.version) == -1:
-                        coordinate_to_artifact[artifact_key] = (bazel_dep_name, artifact)
-                else:
-                    coordinate_to_artifact[artifact_key] = (bazel_dep_name, artifact)
-
-    if return_only_artifacts:
-        return [v[1] for v in coordinate_to_artifact.values()]
-    else:
-        return coordinate_to_artifact
-
-# Each bzlmod module may contribute jars to different rules_jvm_external maven repo namespaces.
-# We emit a warning to the user if a module overrides an artifact version in the root maven repo.
-#
-# This can be typical for the default @maven namespace, if a bzlmod dependency
-# wishes to contribute to the users' jars.
-def _deduplicate_artifacts_with_root_priority(name, root_artifacts, bazel_dep_to_non_root_artifacts, repin_env_var, rje_verbose_env_var):
-    """Deduplicate artifacts, giving priority to root module artifacts with force_version set."""
-    non_root_coordinate_to_artifact = _deduplicate_non_root_artifacts(bazel_dep_to_non_root_artifacts)
-
-    duplicate_artifact_warning = ""
-    filtered_non_root_artifacts = []
-    for root_artifact in root_artifacts:
-        artifact_key = to_key(root_artifact)
-        if artifact_key in non_root_coordinate_to_artifact:
-            bazel_dep_name, non_root_artifact = non_root_coordinate_to_artifact.pop(artifact_key)
-            if not getattr(root_artifact, "force_version", False):
-                # prioritize highest version
-                if compare_maven_versions(root_artifact.version, non_root_artifact.version) == -1:
-                    filtered_non_root_artifacts.append(non_root_artifact)
-                    duplicate_artifact_warning = duplicate_artifact_warning + (
-                        "\nWARNING: For dependency '%s:%s' the root @%s repo wants version %s, " % (root_artifact.group, root_artifact.artifact, name, root_artifact.version) +
-                        "but got %s from the %s bazel dep. " % (non_root_artifact.version, bazel_dep_name) +
-                        "Please update the version in your MODULE.bazel or set `force_version = True`."
-                    )
-
-    # Add any remaining non root artifacts that weren't found in the root artifact list
-    addtional_artifact_message = ""
-    for bazel_dep_name, non_root_artifact in non_root_coordinate_to_artifact.values():
-        addtional_artifact_message = addtional_artifact_message + (
-            "\nINFO: The @%s repo is getting the additional artifact %s:%s:%s from the %s bazel dep." % (name, non_root_artifact.group, non_root_artifact.artifact, non_root_artifact.version, bazel_dep_name)
-        )
-        filtered_non_root_artifacts.append(non_root_artifact)
-
-    if repin_env_var:
-        if duplicate_artifact_warning != "":
-            print(duplicate_artifact_warning)
-        if rje_verbose_env_var:
-            if addtional_artifact_message != "":
-                print(addtional_artifact_message)
-
-    return root_artifacts + filtered_non_root_artifacts
 
 def _get_tri_state_bool(amend_val, original_val):
     if amend_val in ["true", "on"]:
@@ -313,6 +240,30 @@ def _coordinates_match(artifact, coordinates):
     coords = unpack_coordinates(coordinates)
     return (artifact.group == coords.group and
             artifact.artifact == coords.artifact)
+
+def apply_amendment(amend, artifacts, boms):
+    """Applies an `amend_artifact` to matching entries in `artifacts` and `boms`.
+
+    Matching is by `group:artifact`, and matched entries are amended in place.
+    Both lists are searched: a BOM declared via `install(boms = ...)` or
+    `from_toml` can be amended through the same mechanism as a regular
+    artifact.
+
+    Args:
+        amend: The `amend_artifact` tag whose values should be applied.
+        artifacts: List of artifact structs to amend in place.
+        boms: List of BOM structs to amend in place.
+
+    Returns:
+        `True` if at least one artifact or BOM matched the amendment.
+    """
+    amended = False
+    for collection in (artifacts, boms):
+        for i, entry in enumerate(collection):
+            if _coordinates_match(entry, amend.coordinates):
+                collection[i] = _amend_artifact(entry, amend)
+                amended = True
+    return amended
 
 def process_gradle_versions_file(parsed, bom_modules):
     artifacts = []
@@ -369,7 +320,9 @@ def process_gradle_versions_file(parsed, bom_modules):
         # Extract just group:artifact for comparison with bom_modules
         module_id = coords.split(":")[0] + ":" + coords.split(":")[1] if ":" in coords else coords
 
-        if module_id in bom_modules:
+        is_bom = type(value) == "dict" and value.get("is_bom", "false").lower() == "true"
+
+        if is_bom or module_id in bom_modules:
             boms.append(unpack_coordinates(coords))
         else:
             artifact = unpack_coordinates(coords)
@@ -526,19 +479,17 @@ def _process_module_tags(mctx):
             repo = target_repos.get(amend.name, {})
             if mod.is_root:
                 artifacts = repo.get("artifacts", [])
+                boms = repo.get("boms", [])
             else:
                 if not "bazel_dep_to_artifacts" in repo:
                     repo["bazel_dep_to_artifacts"] = {}
                 artifacts = repo["bazel_dep_to_artifacts"].get(mod.name, [])
+                if not "bazel_dep_to_boms" in repo:
+                    repo["bazel_dep_to_boms"] = {}
+                boms = repo["bazel_dep_to_boms"].get(mod.name, [])
 
-            # Find matching artifacts and amend them
-            amended = False
-            for i, artifact in enumerate(artifacts):
-                if _coordinates_match(artifact, amend.coordinates):
-                    artifacts[i] = _amend_artifact(artifact, amend)
-                    amended = True
-
-            if not amended:
+            # Amend matching artifacts and BOMs.
+            if not apply_amendment(amend, artifacts, boms):
                 # If no matching artifact found, this might be an error or we could create a placeholder
                 fail("No artifact found matching coordinates '%s' for amendment" % amend.coordinates)
 
@@ -554,13 +505,20 @@ def _merge_repo_lists(root_list, non_root_list):
             seen.append(item)
     return merged_list
 
-def remove_fields(s):
-    """Used for reducing an artifact struct down to only those fields that have values"""
-    return {
-        k: getattr(s, k)
-        for k in dir(s)
-        if k != "to_json" and k != "to_proto" and getattr(s, k, None)
-    } | {"version": getattr(s, "version", "")}
+def concat_coursier_options(root_list, non_root_list):
+    """Concatenate coursier options (root first), never deduplicating.
+
+    Unlike the other repo list attributes, `additional_coursier_options` is an
+    ordered argument vector passed verbatim to coursier, not a set. It can
+    legitimately contain repeated identical tokens (e.g. coursier's repeatable
+    `--variant` flag), so deduplicating it would corrupt the argument list.
+    """
+    return root_list + non_root_list
+
+def _print_layering_diagnostics(diagnostics, repin_env_var, rje_verbose_env_var):
+    for diagnostic in diagnostics:
+        if should_print_diagnostic(diagnostic, repin_env_var, rje_verbose_env_var):
+            print(diagnostic.text)
 
 def maven_impl(mctx):
     repos = {}
@@ -604,9 +562,8 @@ def maven_impl(mctx):
     # Second pass: merge and deduplicate repositories
     all_repo_names = {name: True for name in root_module_repos.keys() + non_root_module_repos.keys()}.keys()
 
-    os_env = mctx.os.environ
-    repin_env_var = os_env.get("REPIN")
-    rje_verbose_env_var = os_env.get("RJE_VERBOSE")
+    repin_env_var = mctx.getenv("REPIN") or mctx.getenv("RULES_JVM_EXTERNAL_REPIN")
+    rje_verbose_env_var = mctx.getenv("RJE_VERBOSE")
 
     for repo_name in all_repo_names:
         root_repo = root_module_repos.get(repo_name, {})
@@ -617,64 +574,32 @@ def maven_impl(mctx):
         merged_repo.update(non_root_repo)
         merged_repo.update(root_repo)
 
-        # Special handling for artifacts and boms - deduplicate with root priority
-        root_artifacts = root_repo.get("artifacts", [])
-        bazel_dep_to_non_root_artifacts = non_root_repo.get("bazel_dep_to_artifacts", {})
-        root_boms = root_repo.get("boms", [])
-        bazel_dep_to_non_root_boms = non_root_repo.get("bazel_dep_to_boms", {})
-
-        if repo_name in root_module_repos.keys():
-            known_contributing_modules = root_repo.get("known_contributing_modules", sets.make())
-            if sets.length(known_contributing_modules) == 0:
-                # Warn users if multiple modules contribute to the same maven `name`
-                _warn_if_multiple_contributing_modules(root_repo, repo_name, bazel_dep_to_non_root_artifacts)
-            else:
-                # Filter results so only modules in the known_contributing_modules add artifacts or boms
-                all_non_root_artifact_modules = bazel_dep_to_non_root_artifacts.keys()
-                bazel_dep_to_non_root_artifacts = {
-                    k: bazel_dep_to_non_root_artifacts[k]
-                    for k in sets.to_list(known_contributing_modules)
-                    if k in bazel_dep_to_non_root_artifacts
-                }
-                if rje_verbose_env_var:
-                    for k in all_non_root_artifact_modules:
-                        if k not in bazel_dep_to_non_root_artifacts.keys():
-                            print("\nINFO: The @%s repo is not using deps from %s because it is not in the known_contributing_modules" % (repo_name, k))
-                all_non_root_bom_modules = bazel_dep_to_non_root_boms.keys()
-                bazel_dep_to_non_root_boms = {
-                    k: bazel_dep_to_non_root_boms[k]
-                    for k in sets.to_list(known_contributing_modules)
-                    if k in bazel_dep_to_non_root_boms
-                }
-                if rje_verbose_env_var:
-                    for k in all_non_root_bom_modules:
-                        if k not in bazel_dep_to_non_root_boms.keys():
-                            print("\nINFO: The @%s repo is not using boms from %s because it is not in the known_contributing_modules" % (repo_name, k))
-
-            merged_repo["artifacts"] = _deduplicate_artifacts_with_root_priority(
-                repo_name,
-                root_artifacts,
-                bazel_dep_to_non_root_artifacts,
-                repin_env_var,
-                rje_verbose_env_var,
-            )
-
-            merged_repo["boms"] = _deduplicate_artifacts_with_root_priority(
-                repo_name,
-                root_boms,
-                bazel_dep_to_non_root_boms,
-                repin_env_var,
-                rje_verbose_env_var,
-            )
-        else:
-            merged_repo["artifacts"] = _deduplicate_non_root_artifacts(bazel_dep_to_non_root_artifacts, True)
-            merged_repo["boms"] = _deduplicate_non_root_artifacts(bazel_dep_to_non_root_boms, True)
+        layered_artifacts_and_boms = layer_maven_namespace(
+            name = repo_name,
+            root_present = repo_name in root_module_repos,
+            root_artifacts = root_repo.get("artifacts", []),
+            root_boms = root_repo.get("boms", []),
+            resolver = root_repo.get("resolver", _DEFAULT_RESOLVER),
+            version_conflict_policy = root_repo.get("version_conflict_policy", "default"),
+            duplicate_version_warning = root_repo.get("duplicate_version_warning") or "warn",
+            known_contributing_modules = root_repo.get("known_contributing_modules", sets.make()),
+            bazel_dep_to_non_root_artifacts = non_root_repo.get("bazel_dep_to_artifacts", {}),
+            bazel_dep_to_non_root_boms = non_root_repo.get("bazel_dep_to_boms", {}),
+        )
+        merged_repo["artifacts"] = layered_artifacts_and_boms.artifacts
+        merged_repo["boms"] = layered_artifacts_and_boms.boms
+        _print_layering_diagnostics(layered_artifacts_and_boms.diagnostics, repin_env_var, rje_verbose_env_var)
 
         # For list attributes, concatenate but avoid duplicates (root items first)
-        for list_attr in ["repositories", "excluded_artifacts", "additional_netrc_lines", "additional_coursier_options"]:
+        for list_attr in ["repositories", "excluded_artifacts", "additional_netrc_lines"]:
             root_list = root_repo.get(list_attr, [])
             non_root_list = non_root_repo.get(list_attr, [])
             merged_repo[list_attr] = _merge_repo_lists(root_list, non_root_list)
+
+        merged_repo["additional_coursier_options"] = concat_coursier_options(
+            root_repo.get("additional_coursier_options", []),
+            non_root_repo.get("additional_coursier_options", []),
+        )
 
         repos[repo_name] = merged_repo
 
@@ -702,6 +627,7 @@ def maven_impl(mctx):
                 repo["fetch_javadoc"] = install.fetch_javadoc
                 repo["fetch_sources"] = install.fetch_sources
                 repo["resolver"] = install.resolver
+                repo["resolver_extra_dependencies"] = install.resolver_extra_dependencies
                 repo["strict_visibility"] = install.strict_visibility
                 if len(install.repositories):
                     mapped_repos = []
@@ -724,8 +650,8 @@ def maven_impl(mctx):
 
     existing_repos = []
     for (name, repo) in repos.items():
-        boms_json = [json.encode(remove_fields(b)) for b in repo.get("boms", [])]
-        artifacts_json = [json.encode(remove_fields(a)) for a in repo.get("artifacts", [])]
+        boms_json = [json.encode(remove_empty_fields(b)) for b in repo.get("boms", [])]
+        artifacts_json = [json.encode(remove_empty_fields(a)) for a in repo.get("artifacts", [])]
 
         excluded_artifacts = parse.parse_exclusion_spec_list(repo.get("excluded_artifacts", []))
         excluded_artifacts_json = [_json.write_exclusion_spec(a) for a in excluded_artifacts]
@@ -820,6 +746,7 @@ def maven_impl(mctx):
                 fetch_sources = repo.get("fetch_sources"),
                 fetch_javadoc = repo.get("fetch_javadoc"),
                 resolver = repo.get("resolver", _DEFAULT_RESOLVER),
+                resolver_extra_dependencies = repo.get("resolver_extra_dependencies", []),
                 generate_compat_repositories = False,
                 maven_install_json = repo.get("lock_file"),
                 dependency_index = repo.get("dependency_index"),
@@ -862,4 +789,11 @@ maven = module_extension(
         "install": install,
         "override": override,
     },
+    environ = [
+        "HOME",
+        "REPIN",
+        "RULES_JVM_EXTERNAL_REPIN",
+        "RJE_VERBOSE",
+        "USERPROFILE",
+    ],
 )

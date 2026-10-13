@@ -22,15 +22,29 @@ java_library(
     name = "IndexJar-lib",
     srcs = [
         "IndexJar.java",
+        "KotlinTopLevel.java",
         "PerJarIndexResults.java",
     ],
     visibility = [
         "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/cmd:__pkg__",
+        "//private/tools/java/com/github/bazelbuild/rules_jvm_external/resolver/remote:__pkg__",
         "//tests/com/github/bazelbuild/rules_jvm_external/jar:__pkg__",
     ],
     deps = [
         artifact(
             "com.google.code.gson:gson",
+            repository_name = "rules_jvm_external_deps",
+        ),
+        artifact(
+            "org.jetbrains.kotlin:kotlin-metadata-jvm",
+            repository_name = "rules_jvm_external_deps",
+        ),
+        artifact(
+            "org.jetbrains.kotlin:kotlin-stdlib",
+            repository_name = "rules_jvm_external_deps",
+        ),
+        artifact(
+            "org.ow2.asm:asm",
             repository_name = "rules_jvm_external_deps",
         ),
     ],

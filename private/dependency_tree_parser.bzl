@@ -33,13 +33,14 @@ load("//private/lib:coordinates.bzl", "to_purl", "unpack_coordinates")
 load("//private/lib:urls.bzl", "scheme_and_host")
 
 def _genrule_copy_artifact_from_http_file(artifact, visibilities):
-    http_file_repository = to_repository_name(artifact["coordinates"])
+    output_repository = to_repository_name(artifact["coordinates"])
+    http_file_repository = to_repository_name(artifact.get("repository_coordinates", artifact["coordinates"]))
 
     file = artifact.get("out", artifact["file"])
 
     genrule = [
         "copy_file(",
-        "     name = \"%s_extension\"," % http_file_repository,
+        "     name = \"%s_extension\"," % output_repository,
         "     src = \"@%s//file\"," % http_file_repository,
         "     out = \"%s\"," % file,
         # Windows doesn't care about the executable bit for executables, but copy_file
@@ -63,6 +64,16 @@ def _deduplicate_list(items):
             seen_items[item] = True
             unique_items.append(item)
     return unique_items
+
+def _is_excluded_dependency(dep, exclusions):
+    dep_coordinates = unpack_coordinates(dep)
+    for exclusion in exclusions:
+        exclusion_coordinates = unpack_coordinates(exclusion)
+        group_matches = exclusion_coordinates.group == "*" or exclusion_coordinates.group == dep_coordinates.group
+        artifact_matches = exclusion_coordinates.artifact == "*" or exclusion_coordinates.artifact == dep_coordinates.artifact
+        if group_matches and artifact_matches:
+            return True
+    return False
 
 def _find_repository_url(artifact_url, repositories):
     longest_match = None
@@ -183,9 +194,12 @@ copy_file(
 
     # Dedupe dependencies here. Sometimes coursier will return "x.y:z:aar:version" and "x.y:z:version" in the
     # same list of dependencies.
+    artifact_exclusions = exclusions.get(simple_coord, [])
     target_import_labels = []
     for dep in artifact["deps"]:
         if get_packaging(dep) == "json":
+            continue
+        if _is_excluded_dependency(dep, artifact_exclusions):
             continue
         stripped_dep = strip_packaging_and_classifier_and_version(dep)
         dep_target_label = escape(stripped_dep)
@@ -515,12 +529,15 @@ def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlin
             all_imports.append(
                 "alias(\n\tname = \"%s\",\n\tactual = \"%s\",\n\tvisibility = %s,)" % (target_label, labels_to_override.get(target_label), visibility),
             )
+            if artifact_path == None:
+                continue
             if repository_ctx.attr.maven_install_json:
                 # Provide the downloaded artifact as a file target.
                 all_imports.append(_genrule_copy_artifact_from_http_file(artifact, default_visibilities))
             raw_artifact = dict(artifact)
             raw_artifact["coordinates"] = "original_" + artifact["coordinates"]
             raw_artifact["maven_coordinates"] = artifact["coordinates"]
+            raw_artifact["repository_coordinates"] = artifact["coordinates"]
             raw_artifact["out"] = "original_" + artifact["file"]
 
             all_imports.extend(_generate_target(
@@ -576,7 +593,10 @@ def _generate_imports(repository_ctx, dependencies, explicit_artifacts, neverlin
             target_import_string.append("\texports = [")
 
             target_import_labels = []
+            artifact_exclusions = exclusions.get(simple_coord, [])
             for dep in artifact.get("deps", []):
+                if _is_excluded_dependency(dep, artifact_exclusions):
+                    continue
                 dep_target_label = escape(strip_packaging_and_classifier_and_version(dep))
 
                 # Coursier returns cyclic dependencies sometimes. Handle it here.
