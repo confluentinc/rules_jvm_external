@@ -69,9 +69,13 @@ import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 @AutoBazelRepository
 public class GradleResolver implements Resolver {
 
+  private static final String FORCE_VERSION_SUFFIX = "!!";
+
   private final EventListener eventListener;
   private final Netrc netrc;
   private final int maxThreads;
+  // Classifiers declared by each POM, keyed by POM file; cleared on every resolution.
+  private final Map<File, Map<String, Set<String>>> declaredClassifiersByPom = new HashMap<>();
 
   public GradleResolver(Netrc netrc, int maxThreads, EventListener eventListener) {
     this.netrc = netrc;
@@ -166,8 +170,12 @@ public class GradleResolver implements Resolver {
     // Create lookup cache for requested dependencies
     Set<String> requestedDepKeys =
         requestedDeps.stream()
-            .map(dep -> makeDepKey(dep.getGroup(), dep.getArtifact(), dep.getVersion()))
+            .map(
+                dep ->
+                    makeDepKey(
+                        dep.getGroup(), dep.getArtifact(), withoutForceSuffix(dep.getVersion())))
             .collect(Collectors.toSet());
+    declaredClassifiersByPom.clear();
 
     Set<Conflict> conflicts = new HashSet<>();
     Map<Coordinates, String> coordinateHashes = new HashMap<>();
@@ -333,6 +341,13 @@ public class GradleResolver implements Resolver {
     return new ResolutionResult(graph, conflicts, artifacts);
   }
 
+  private static String withoutForceSuffix(String version) {
+    if (version != null && version.endsWith(FORCE_VERSION_SUFFIX)) {
+      return version.substring(0, version.length() - FORCE_VERSION_SUFFIX.length());
+    }
+    return version;
+  }
+
   private static String makeDepKey(String group, String artifact, String version) {
     return group + ":" + artifact + ":" + (version == null ? "" : version);
   }
@@ -376,9 +391,16 @@ public class GradleResolver implements Resolver {
     visited.add(parent);
     graph.addNode(parent);
 
+    Map<String, Set<String>> declaredClassifiers =
+        involvesClassifiers(parentInfo) ? declaredClassifiers(parentInfo) : Map.of();
+    addOwnClassifierEdges(graph, parent, parentInfo, declaredClassifiers, artifactsByNode);
+
     if (parentInfo.getChildren() != null) {
       for (GradleResolvedDependency childInfo : parentInfo.getChildren()) {
         for (GradleResolvedArtifact childArtifact : artifactsForGraph(childInfo)) {
+          if (isClassifierNotDeclared(declaredClassifiers, childInfo, childArtifact)) {
+            continue;
+          }
           GradleCoordinates childCoordinates =
               new GradleCoordinatesImpl(
                   childInfo.getGroup(),
@@ -445,6 +467,118 @@ public class GradleResolver implements Resolver {
         }
       }
     }
+  }
+
+  // Gradle merges all classifiers of a module into one node, so a parent's edge to that module
+  // carries every classified artifact requested anywhere in the build. Drop the ones the parent's
+  // POM does not declare. The filter is skipped when the POM gives no usable information, or when
+  // it names the module without a classifier and the module has no unclassified jar (an
+  // aggregating module whose classified jars are the real artifacts).
+  private boolean isClassifierNotDeclared(
+      Map<String, Set<String>> declaredClassifiers,
+      GradleResolvedDependency child,
+      GradleResolvedArtifact artifact) {
+    if (!hasClassifier(artifact)) {
+      return false;
+    }
+    Set<String> declared = declaredClassifiers.get(child.getGroup() + ":" + child.getName());
+    if (declared == null || declared.contains(artifact.getClassifier())) {
+      return false;
+    }
+    boolean declaresAClassifier = declared.stream().anyMatch(c -> !c.isEmpty());
+    return declaresAClassifier || hasUnclassifiedBinary(child);
+  }
+
+  private boolean hasUnclassifiedBinary(GradleResolvedDependency dependency) {
+    return dependency.getArtifacts().stream()
+        .anyMatch(artifact -> !isPomArtifact(artifact) && !hasClassifier(artifact));
+  }
+
+  private static boolean hasClassifier(GradleResolvedArtifact artifact) {
+    return artifact.getClassifier() != null && !artifact.getClassifier().isEmpty();
+  }
+
+  // Classifier filtering only matters when a classified artifact is on either side of the edge.
+  private boolean involvesClassifiers(GradleResolvedDependency info) {
+    if (info.getArtifacts().stream().anyMatch(GradleResolver::hasClassifier)) {
+      return true;
+    }
+    return info.getChildren() != null
+        && info.getChildren().stream()
+            .anyMatch(
+                child -> child.getArtifacts().stream().anyMatch(GradleResolver::hasClassifier));
+  }
+
+  // A POM may depend on classified artifacts of its own module (for example per-platform native
+  // jars). Gradle folds those into the module node, so the edges are added here.
+  private void addOwnClassifierEdges(
+      MutableGraph<Coordinates> graph,
+      Coordinates parent,
+      GradleResolvedDependency parentInfo,
+      Map<String, Set<String>> declaredClassifiers,
+      Map<Coordinates, List<GradleResolvedArtifact>> artifactsByNode) {
+    if (parent.getClassifier() != null && !parent.getClassifier().isEmpty()) {
+      return;
+    }
+    Set<String> own = declaredClassifiers.get(parentInfo.getGroup() + ":" + parentInfo.getName());
+    if (own == null) {
+      return;
+    }
+    for (GradleResolvedArtifact artifact : artifactsForGraph(parentInfo)) {
+      String classifier = artifact.getClassifier();
+      if (!hasClassifier(artifact) || !own.contains(classifier)) {
+        continue;
+      }
+      String extension = "pom".equals(artifact.getExtension()) ? null : artifact.getExtension();
+      Coordinates classified =
+          new Coordinates(
+              parentInfo.getGroup(),
+              parentInfo.getName(),
+              extension,
+              classifier,
+              parentInfo.getVersion());
+      List<GradleResolvedArtifact> known =
+          artifactsByNode.computeIfAbsent(classified, k -> new ArrayList<>());
+      if (!known.contains(artifact)) {
+        known.add(artifact);
+      }
+      graph.addNode(classified);
+      graph.putEdge(parent, classified);
+    }
+  }
+
+  private Map<String, Set<String>> declaredClassifiers(GradleResolvedDependency info) {
+    File pom = info.getPomFile();
+    if (pom == null || !pom.exists()) {
+      return Map.of();
+    }
+    return declaredClassifiersByPom.computeIfAbsent(pom, this::readDeclaredClassifiers);
+  }
+
+  private Map<String, Set<String>> readDeclaredClassifiers(File pomFile) {
+    Map<String, Set<String>> declared = new HashMap<>();
+    Set<String> unknown = new HashSet<>();
+    try (FileInputStream fis = new FileInputStream(pomFile);
+        BufferedInputStream bis = new BufferedInputStream(fis)) {
+      Model model = new MavenXpp3Reader().read(ReaderFactory.newXmlReader(bis));
+      for (org.apache.maven.model.Dependency dependency : model.getDependencies()) {
+        String key = dependency.getGroupId() + ":" + dependency.getArtifactId();
+        String classifier = dependency.getClassifier() == null ? "" : dependency.getClassifier();
+        if (classifier.contains("${")) {
+          unknown.add(key);
+        }
+        declared.computeIfAbsent(key, k -> new HashSet<>()).add(classifier);
+      }
+    } catch (IOException | XmlPullParserException e) {
+      eventListener.onEvent(
+          new LogEvent(
+              "gradle",
+              "readDeclaredClassifiers: could not read " + pomFile + ", keeping all classifiers",
+              e.toString()));
+      return Map.of();
+    }
+    declared.keySet().removeAll(unknown);
+    return declared;
   }
 
   private void collapseRelocations(
@@ -692,11 +826,18 @@ public class GradleResolver implements Resolver {
               exclusions.add(new ExclusionImpl(exclusion.getGroupId(), exclusion.getArtifactId()));
             });
 
-    // When force_version is true, use Gradle's !! shorthand which is equivalent to strictly()
-    // This forces the exact version and prevents transitive dependencies from overriding it
+    // When force_version is true, use Gradle's !! shorthand which is equivalent to strictly().
+    // This forces the exact version and prevents transitive dependencies from overriding it. A
+    // forced dependency must therefore have a version.
     String version = coordinates.getVersion();
-    if (artifact.isForceVersion() && version != null && !version.isEmpty()) {
-      version = version + "!!";
+    if (artifact.isForceVersion()) {
+      if (version == null || version.isEmpty()) {
+        throw new IllegalArgumentException(
+            "Cannot force the version of "
+                + coordinates
+                + " because it has no version. Give it a version or remove force_version.");
+      }
+      version = version + FORCE_VERSION_SUFFIX;
     }
 
     return new GradleDependencyImpl(

@@ -14,6 +14,7 @@
 
 package com.github.bazelbuild.rules_jvm_external.resolver.gradle.models;
 
+import java.io.File;
 import java.util.List;
 import java.util.Set;
 
@@ -71,4 +72,9 @@ public interface GradleResolvedDependency {
   void setArtifacts(List<GradleResolvedArtifact> artifacts);
 
   void addArtifact(GradleResolvedArtifact artifact);
+
+  /** The module's POM file, or null if it could not be resolved. */
+  File getPomFile();
+
+  void setPomFile(File pomFile);
 }

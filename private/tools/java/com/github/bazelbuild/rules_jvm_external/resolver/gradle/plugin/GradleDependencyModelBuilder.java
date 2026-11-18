@@ -576,6 +576,9 @@ public class GradleDependencyModelBuilder implements ToolingModelBuilder {
     ArtifactResolutionQuery query = project.getDependencies().createArtifactResolutionQuery();
     query.withArtifacts(MavenModule.class, MavenPomArtifact.class);
 
+    // Components requested with an explicit extension get no POM artifact node, but their POM file
+    // is still recorded.
+    Set<String> componentsWithoutPomArtifact = new HashSet<>();
     boolean hasItems = false;
     for (List<GradleResolvedDependency> variants : dependenciesByComponent.values()) {
       GradleResolvedDependency dependency = choosePomCarrier(variants);
@@ -595,7 +598,8 @@ public class GradleDependencyModelBuilder implements ToolingModelBuilder {
                           && declaredDep.getExtension() != null);
 
       if (isDeclaredWithExplicitExtension) {
-        continue;
+        componentsWithoutPomArtifact.add(
+            componentKey(dependency.getGroup(), dependency.getName(), dependency.getVersion()));
       }
 
       query.forModule(dependency.getGroup(), dependency.getName(), dependency.getVersion());
@@ -626,6 +630,11 @@ public class GradleDependencyModelBuilder implements ToolingModelBuilder {
         if (artifact instanceof ResolvedArtifactResult) {
           ResolvedArtifactResult resolvedArtifactResult = (ResolvedArtifactResult) artifact;
           if (resolvedArtifactResult.getFile() != null) {
+            resolvedDependency.setPomFile(resolvedArtifactResult.getFile());
+            if (componentsWithoutPomArtifact.contains(
+                componentKey(module.getGroup(), module.getModule(), module.getVersion()))) {
+              continue;
+            }
             GradleResolvedArtifact resolvedArtifact = new GradleResolvedArtifactImpl();
             resolvedArtifact.setFile(resolvedArtifactResult.getFile());
             String packaging = PomUtil.extractPackagingFromPom(resolvedArtifactResult.getFile());

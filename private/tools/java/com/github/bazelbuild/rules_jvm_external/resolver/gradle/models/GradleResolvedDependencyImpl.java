@@ -14,6 +14,7 @@
 
 package com.github.bazelbuild.rules_jvm_external.resolver.gradle.models;
 
+import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -32,6 +33,7 @@ public class GradleResolvedDependencyImpl implements Serializable, GradleResolve
   private List<GradleResolvedDependency> children;
   private boolean fromBom;
   private List<GradleResolvedArtifact> artifacts;
+  private File pomFile;
 
   public GradleResolvedDependencyImpl() {
     this.artifacts = new ArrayList<>();
@@ -119,6 +121,16 @@ public class GradleResolvedDependencyImpl implements Serializable, GradleResolve
   @Override
   public void setArtifacts(List<GradleResolvedArtifact> artifacts) {
     this.artifacts = artifacts;
+  }
+
+  @Override
+  public File getPomFile() {
+    return pomFile;
+  }
+
+  @Override
+  public void setPomFile(File pomFile) {
+    this.pomFile = pomFile;
   }
 
   @Override

@@ -758,4 +758,165 @@ public class GradleResolverTest extends ResolverTestBase {
         "Artifacts should not contain conflicting lower version",
         artifacts.containsKey(lowerVersion));
   }
+
+  @Test
+  public void attachesClassifierJarsDeclaredByThePomToTheUnclassifiedNode() {
+    Coordinates ssl = new Coordinates("com.example:ssl:1.0");
+    Coordinates classes = new Coordinates("com.example:classes:1.0");
+    Coordinates linux = new Coordinates("com.example:ssl:jar:linux-x86_64:1.0");
+    Coordinates osx = new Coordinates("com.example:ssl:jar:osx-x86_64:1.0");
+    Path repo =
+        MavenRepo.create()
+            .add(classes)
+            .add(ssl, classes, linux, osx)
+            .addArtifactOnly(linux)
+            .addArtifactOnly(osx)
+            .getPath();
+
+    Graph<Coordinates> graph =
+        resolver.resolve(prepareRequestFor(repo.toUri(), ssl, linux, osx)).getResolution();
+
+    assertEquals(Set.of(classes, linux, osx), graph.successors(ssl));
+  }
+
+  @Test
+  public void parentsOnlyDependOnTheClassifierJarsTheirPomDeclares() {
+    Coordinates nat = new Coordinates("com.example:nat:1.0");
+    Coordinates linux = new Coordinates("com.example:nat:jar:linux:1.0");
+    Coordinates osx = new Coordinates("com.example:nat:jar:osx:1.0");
+    Coordinates a = new Coordinates("com.example:a:1.0");
+    Coordinates b = new Coordinates("com.example:b:1.0");
+    Path repo =
+        MavenRepo.create()
+            .add(nat)
+            .addArtifactOnly(linux)
+            .addArtifactOnly(osx)
+            .add(a, linux)
+            .add(b, osx)
+            .getPath();
+
+    Graph<Coordinates> graph =
+        resolver.resolve(prepareRequestFor(repo.toUri(), a, b)).getResolution();
+
+    assertEquals(Set.of(linux), graph.successors(a));
+    assertEquals(Set.of(osx), graph.successors(b));
+  }
+
+  @Test
+  public void forcedVersionThatCannotBeResolvedFailsResolution() {
+    Coordinates ok = new Coordinates("com.example:ok:1.0");
+    Coordinates missing = new Coordinates("com.example:missing:9.9");
+    Path repo = MavenRepo.create().add(ok).getPath();
+    ResolutionRequest request =
+        new ResolutionRequest()
+            .addRepository(repo.toUri())
+            .addArtifact(new Artifact(ok))
+            .addArtifact(new Artifact(missing, Set.of(), true));
+
+    try {
+      resolver.resolve(request).getResolution();
+      fail("Resolution shouldn't succeed if a forced version is missing from the repository");
+    } catch (Exception e) {
+      assertTrue(String.valueOf(e), e.getCause() instanceof GradleDependencyResolutionException);
+      assertTrue(e.getCause().getMessage().contains("com.example:missing:9.9"));
+    }
+  }
+
+  @Test
+  public void forcedVersionThatWinsOverATransitiveRequestIsNotReportedAsConflict() {
+    Coordinates pinned = new Coordinates("com.example:lib:1.0");
+    Coordinates higher = new Coordinates("com.example:lib:2.0");
+    Coordinates app = new Coordinates("com.example:app:1.0");
+    Path repo = MavenRepo.create().add(pinned).add(higher).add(app, higher).getPath();
+
+    ResolutionResult result =
+        resolver.resolve(
+            new ResolutionRequest()
+                .addRepository(repo.toUri())
+                .addArtifact(new Artifact(app))
+                .addArtifact(new Artifact(pinned, Set.of(), true)));
+
+    assertEquals(Set.of(), result.getConflicts());
+    assertTrue(result.getResolution().nodes().contains(pinned));
+    assertFalse(result.getResolution().nodes().contains(higher));
+  }
+
+  @Test
+  public void forcingAVersionlessDependencyIsRejected() {
+    Coordinates bom = new Coordinates("com.example:bom:1.0");
+    Coordinates lib1 = new Coordinates("com.example:lib:1.0");
+    Coordinates lib2 = new Coordinates("com.example:lib:2.0");
+    Coordinates app = new Coordinates("com.example:app:1.0");
+    Path repo =
+        MavenRepo.create().add(lib1).add(lib2).add(app, lib2).add(createBom(bom, lib1)).getPath();
+    ResolutionRequest request =
+        new ResolutionRequest()
+            .addRepository(repo.toUri())
+            .addBom(bom)
+            .addArtifact(new Artifact(app))
+            .addArtifact(new Artifact(new Coordinates("com.example:lib"), Set.of(), true));
+
+    try {
+      resolver.resolve(request).getResolution();
+      fail("Forcing a dependency that has no version must not be silently ignored");
+    } catch (IllegalArgumentException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains("com.example:lib"));
+      assertTrue(e.getMessage(), e.getMessage().contains("force"));
+    }
+  }
+
+  @Test
+  public void moduleRequestedOnlyByClassifierHasNoUnclassifiedNode() {
+    Coordinates uber = new Coordinates("com.example:lib:jar:uber:1.0");
+    Path repo = MavenRepo.create().add(uber).getPath();
+
+    Graph<Coordinates> graph =
+        resolver.resolve(prepareRequestFor(repo.toUri(), uber)).getResolution();
+
+    assertEquals(Set.of(uber), graph.nodes());
+  }
+
+  @Test
+  public void parentOfAnAggregatingModuleKeepsTheModulesClassifierJars() throws IOException {
+    Coordinates agg = new Coordinates("com.example:agg:1.0");
+    Coordinates linux = new Coordinates("com.example:agg:jar:linux:1.0");
+    Coordinates osx = new Coordinates("com.example:agg:jar:osx:1.0");
+    Coordinates parent = new Coordinates("com.example:parent:1.0");
+    Model aggModel = createModel(agg);
+    aggModel.setPackaging("pom");
+    MavenRepo repo =
+        MavenRepo.create()
+            .writePomFile(aggModel)
+            .addArtifactOnly(linux)
+            .addArtifactOnly(osx)
+            .add(parent, agg);
+
+    Graph<Coordinates> graph =
+        resolver
+            .resolve(prepareRequestFor(repo.getPath().toUri(), parent, linux, osx))
+            .getResolution();
+
+    assertTrue(graph.successors(parent).containsAll(Set.of(linux, osx)));
+  }
+
+  @Test
+  public void keepsClassifierEdgesWhenThePomDeclaresTheClassifierWithAProperty() {
+    Coordinates nat = new Coordinates("com.example:nat:1.0");
+    Coordinates linux = new Coordinates("com.example:nat:jar:linux:1.0");
+    Coordinates parent = new Coordinates("com.example:parent:1.0");
+    Dependency dependency = new Dependency();
+    dependency.setGroupId("com.example");
+    dependency.setArtifactId("nat");
+    dependency.setVersion("1.0");
+    dependency.setClassifier("${platform}");
+    Model parentModel = createModel(parent);
+    parentModel.addProperty("platform", "linux");
+    parentModel.addDependency(dependency);
+    Path repo = MavenRepo.create().add(nat).addArtifactOnly(linux).add(parentModel).getPath();
+
+    Graph<Coordinates> graph =
+        resolver.resolve(prepareRequestFor(repo.toUri(), parent, linux)).getResolution();
+
+    assertEquals(Set.of(linux), graph.successors(parent));
+  }
 }
