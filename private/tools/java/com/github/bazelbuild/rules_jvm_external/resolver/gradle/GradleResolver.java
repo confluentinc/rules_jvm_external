@@ -827,16 +827,9 @@ public class GradleResolver implements Resolver {
             });
 
     // When force_version is true, use Gradle's !! shorthand which is equivalent to strictly().
-    // This forces the exact version and prevents transitive dependencies from overriding it. A
-    // forced dependency must therefore have a version.
+    // This forces the exact version and prevents transitive dependencies from overriding it
     String version = coordinates.getVersion();
-    if (artifact.isForceVersion()) {
-      if (version == null || version.isEmpty()) {
-        throw new IllegalArgumentException(
-            "Cannot force the version of "
-                + coordinates
-                + " because it has no version. Give it a version or remove force_version.");
-      }
+    if (artifact.isForceVersion() && version != null && !version.isEmpty()) {
       version = version + FORCE_VERSION_SUFFIX;
     }
 

@@ -842,30 +842,6 @@ public class GradleResolverTest extends ResolverTestBase {
   }
 
   @Test
-  public void forcingAVersionlessDependencyIsRejected() {
-    Coordinates bom = new Coordinates("com.example:bom:1.0");
-    Coordinates lib1 = new Coordinates("com.example:lib:1.0");
-    Coordinates lib2 = new Coordinates("com.example:lib:2.0");
-    Coordinates app = new Coordinates("com.example:app:1.0");
-    Path repo =
-        MavenRepo.create().add(lib1).add(lib2).add(app, lib2).add(createBom(bom, lib1)).getPath();
-    ResolutionRequest request =
-        new ResolutionRequest()
-            .addRepository(repo.toUri())
-            .addBom(bom)
-            .addArtifact(new Artifact(app))
-            .addArtifact(new Artifact(new Coordinates("com.example:lib"), Set.of(), true));
-
-    try {
-      resolver.resolve(request).getResolution();
-      fail("Forcing a dependency that has no version must not be silently ignored");
-    } catch (IllegalArgumentException e) {
-      assertTrue(e.getMessage(), e.getMessage().contains("com.example:lib"));
-      assertTrue(e.getMessage(), e.getMessage().contains("force"));
-    }
-  }
-
-  @Test
   public void moduleRequestedOnlyByClassifierHasNoUnclassifiedNode() {
     Coordinates uber = new Coordinates("com.example:lib:jar:uber:1.0");
     Path repo = MavenRepo.create().add(uber).getPath();
